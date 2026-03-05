@@ -15,19 +15,23 @@ app.get('/', (req, res) => {
 
 // Import Models & Routes
 const { createEmployeeSheet } = require('./src/models/employee.model');
-
-
+const { createItemMasterSheet } = require("./src/models/ItemMaster.model")
+const { createCustomerSheet } = require("./src/models/customer.model")
+const {createSaveSheet} = require("./src/models/save.model")
 
 const authRoutes = require('./src/routes/auth.routes');
 const employeeRoutes = require('./src/routes/employee.routes');
-
+const itemRoutes = require('./src/routes/item.routes');
+const customerRoutes = require('./src/routes/customer.routes');
+const saveRoutes = require('./src/routes/save.routes');
 
 
 // Routes registration
 app.use('/api/auth', authRoutes);
-
-
-
+app.use('/api/employee', employeeRoutes);
+app.use('/api/item', itemRoutes);
+app.use('/api/customer', customerRoutes);
+app.use('/api/save',saveRoutes)
 const fs = require('fs');
 if (fs.existsSync('uploads')) {
     app.use('/uploads', express.static('uploads'));
@@ -36,8 +40,9 @@ if (fs.existsSync('uploads')) {
 // Initialize Database Tables
 Promise.all([
     createEmployeeSheet(),
-
-
+createItemMasterSheet(),
+createCustomerSheet(),
+createSaveSheet()
 ])
     .then(() => {
         console.log('Database synchronization complete');
