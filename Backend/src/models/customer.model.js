@@ -14,6 +14,7 @@ const createCustomerSheet = async () => {
     "Contact_Person",
     "Email_Address",
     "Contact_Mobile",
+    "Delivery_Address",
     "Created_at",
     "Updated_at"
   ]];

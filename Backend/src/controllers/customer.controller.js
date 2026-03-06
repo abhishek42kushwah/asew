@@ -6,80 +6,67 @@ const SHEET_NAME = "Customer_Master";
  * CREATE CUSTOMER
  */
 exports.createCustomer = async (req, res) => {
-
   try {
-
     const {
       Customer_Name,
       Buyer_Address,
+      Delivery_Address,
       GSTIN_UIN,
       PAN_No,
       Contact_Person,
       Email_Address,
-      Contact_Mobile
+      Contact_Mobile,
     } = req.body;
 
     await db.insertByHeader(SHEET_NAME, {
       Date: new Date().toLocaleDateString(),
       Customer_Name,
       Buyer_Address,
+      Delivery_Address,
       GSTIN_UIN,
       PAN_No,
       Contact_Person,
       Email_Address,
       Contact_Mobile,
       Created_at: new Date().toISOString(),
-      Updated_at: new Date().toISOString()
+      Updated_at: new Date().toISOString(),
     });
 
     res.status(201).json({
-      message: "Customer created successfully"
+      message: "Customer created successfully",
     });
-
   } catch (err) {
-
     console.error(err);
 
     res.status(500).json({
-      message: "Error creating customer"
+      message: "Error creating customer",
     });
-
   }
-
 };
-
 
 /**
  * GET ALL CUSTOMERS
  */
 exports.getCustomers = async (req, res) => {
   try {
-
     const { name } = req.query;
 
     let customers;
 
     if (name) {
       // Search by name
-      customers = await db.find(
-        SHEET_NAME,
-        "Customer_Name",
-        name
-      );
+      customers = await db.find(SHEET_NAME, "Customer_Name", name);
     } else {
       // Get all customers
       customers = await db.getAll(SHEET_NAME);
     }
 
     res.json(customers);
-
   } catch (err) {
-
     console.error(err);
 
     res.status(500).json({
-      message: "Error fetching customers"
+      message: "Error fetching customers",
     });
-
   }
 };
