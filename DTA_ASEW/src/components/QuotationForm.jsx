@@ -25,7 +25,7 @@ import { fetchResponses, createResponse } from "../store/slices/responseSlice";
 import CustomerModal from "./CustomerModal";
 import Select from "react-select";
 import toast from "react-hot-toast";
-import { generateQuotationPDF } from "../utils/pdfGenerator";
+import { generateQuotationPDF, generatePDFBlob } from "../utils/pdfGenerator";
 
 const QuotationForm = () => {
   const dispatch = useDispatch();
@@ -348,8 +348,20 @@ const QuotationForm = () => {
 
       if (found) {
         const header = found.header || found;
-        const items =
-          found.items || (found.ITEMS ? JSON.parse(found.ITEMS) : []);
+        let items = [];
+        if (found.items && Array.isArray(found.items)) {
+          items = found.items;
+        } else if (found.ITEMS) {
+          items =
+            typeof found.ITEMS === "string"
+              ? JSON.parse(found.ITEMS)
+              : found.ITEMS;
+        } else if (header.ITEMS) {
+          items =
+            typeof header.ITEMS === "string"
+              ? JSON.parse(header.ITEMS)
+              : header.ITEMS;
+        }
 
         setFormData((prev) => ({
           ...prev,
@@ -386,7 +398,10 @@ const QuotationForm = () => {
             make: item.make || item.Make || item.MAKE || "",
             nabl: item.nabl || item.NABL || "No",
             discount_percent: Number(
-              item.discount_percent || item.Item_Discount || 0,
+              item.discount_percent ||
+                item.Item_Discount ||
+                item.Discount_Percent ||
+                0,
             ),
             image: null,
           })),
@@ -401,7 +416,7 @@ const QuotationForm = () => {
     }, 600);
   };
 
-  const handleSubmit = (actionType) => {
+  const handleSubmit = async (actionType) => {
     // Basic validations
     if (!formData.Date) {
       toast.error("Date is required.");
@@ -435,11 +450,39 @@ const QuotationForm = () => {
       }
     });
 
+    const loadingToastId = toast.loading("Processing quotation...");
+
+    try {
+      const totals = {
+        subtotal: calculateSubtotal(),
+        grandTotal: calculateGrandTotal(),
+      };
+      const pdfBlob = await generatePDFBlob(
+        formData,
+        validItems,
+        showFields,
+        totals,
+      );
+      // Append PDF File for the API to upload to Drive
+      data.append(
+        "Generated_PDF",
+        pdfBlob,
+        `Quotation_${formData.Quotation_No || "New"}.pdf`,
+      );
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      toast.error("Failed to generate PDF. Proceeding without it.", {
+        id: loadingToastId,
+      });
+    }
+
     if (actionType === "save") {
       dispatch(createSave(data))
         .unwrap()
         .then(() => {
-          toast.success("Quotation saved successfully!");
+          toast.success("Quotation saved successfully!", {
+            id: loadingToastId,
+          });
         })
         .catch((error) => {
           toast.error(error || "Failed to save quotation");
@@ -505,7 +548,7 @@ const QuotationForm = () => {
                 value={copyQuotationNo}
                 onChange={(e) => setCopyQuotationNo(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleCopyOld()}
-                placeholder="2025-26/QT/1250"
+                placeholder="2025-26/QT/0001"
                 autoFocus
                 className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:border-[#f39c12] transition-colors placeholder-gray-300"
               />
