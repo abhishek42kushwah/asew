@@ -9,56 +9,54 @@ const SHEET_NAME = "save";
 
 exports.createSave = async (req, res) => {
   try {
-
     const data = req.body;
 
-    let Image_URL = [];
-    let Generated_PDF = [];
+    let Image_URL = "";
+    let Generated_PDF = "";
 
-    // Upload Images
-    if (req.files?.Image_URL) {
-      Image_URL = await Promise.all(
-        req.files.Image_URL.map((file) =>
-          uploadToDrive(file.buffer, file.originalname, file.mimetype)
-        )
+    // Upload Image (Single)
+    if (req.files?.Image_URL?.[0]) {
+      const file = req.files.Image_URL[0];
+      Image_URL = await uploadToDrive(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
       );
     }
 
-    // Upload PDF
-    if (req.files?.Generated_PDF) {
-      Generated_PDF = await Promise.all(
-        req.files.Generated_PDF.map((file) =>
-          uploadToDrive(file.buffer, file.originalname, file.mimetype)
-        )
+    // Upload PDF (Single)
+    if (req.files?.Generated_PDF?.[0]) {
+      const file = req.files.Generated_PDF[0];
+      Generated_PDF = await uploadToDrive(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
       );
     }
 
     // Generate quotation number
-    const allRows = await db.getAll(SHEET_NAME);
+    let quotationNo = data.Quotation_No;
 
-    const uniqueNumbers = [
-      ...new Set(allRows.map((r) => r.Quotation_No))
-    ];
-
-    const nextNumber = uniqueNumbers.length + 1;
-
-    const quotationNo =
-      `2025-26/QT/${String(nextNumber).padStart(4, "0")}`;
+    if (!quotationNo) {
+      const allRows = await db.getAll(SHEET_NAME);
+      const uniqueNumbers = [...new Set(allRows.map((r) => r.Quotation_No))];
+      const nextNumber = uniqueNumbers.length + 1;
+      quotationNo = `2025-26/QT/${String(nextNumber).padStart(4, "0")}`;
+    }
 
     // Items
     const items = Array.isArray(data.ITEMS)
       ? data.ITEMS
       : JSON.parse(data.ITEMS || "[]");
 
-    const insertedRows = [];   // ⭐ collect results
+    const insertedRows = []; // ⭐ collect results
 
     for (const item of items) {
-
       // Auto fetch item master
       const itemData = await db.find(
         "Item_Master",
         "ITEM_NAME",
-        item.item_name
+        item.item_name,
       );
 
       const master = itemData[0] || {};
@@ -72,7 +70,6 @@ exports.createSave = async (req, res) => {
       const totalPrice = unitPrice * item.qty;
 
       const rowData = {
-
         Date: data.Date,
         Quotation_No: quotationNo,
         Customer_Name: data.Customer_Name,
@@ -91,7 +88,7 @@ exports.createSave = async (req, res) => {
 
         Subtotal: data.Subtotal,
 
-        Image_URL: JSON.stringify(Image_URL),
+        Image_URL: Image_URL,
 
         Discount: data.Discount,
         GST: data.GST,
@@ -99,7 +96,7 @@ exports.createSave = async (req, res) => {
         Packaging_Charges: data.Packaging_Charges,
         Total_Amount: data.Total_Amount,
 
-        Generated_PDF: JSON.stringify(Generated_PDF),
+        Generated_PDF: Generated_PDF,
 
         ITEMS: JSON.stringify(items),
 
@@ -124,20 +121,17 @@ exports.createSave = async (req, res) => {
         Item_Discount: item.discount || 0,
 
         Term_Payment:
-          data.Term_Payment ||
-          "30% advance & balance at the time of dispatch",
+          data.Term_Payment || "30% advance & balance at the time of dispatch",
 
         NABL: data.NABL,
 
         Created_at: new Date().toISOString(),
         Updated_at: new Date().toISOString(),
-
       };
 
       await db.insertByHeader(SHEET_NAME, rowData);
 
       insertedRows.push(rowData); // ⭐ push row
-
     }
 
     res.status(201).json({
@@ -145,78 +139,62 @@ exports.createSave = async (req, res) => {
       quotation_no: quotationNo,
       message: "Save created successfully",
       total_items: insertedRows.length,
-      data: insertedRows
+      data: insertedRows,
     });
-
   } catch (error) {
-
     console.error(error);
 
     res.status(500).json({
-      message: "Error creating save"
+      message: "Error creating save",
     });
-
   }
 };
 
-
 exports.getAllSave = async (req, res) => {
-
   try {
-
     const { quotationNo } = req.query;
 
     const rows = await db.getAll(SHEET_NAME);
 
     // FILTER BY QUOTATION
     const filteredRows = quotationNo
-      ? rows.filter(r => r.Quotation_No === quotationNo)
+      ? rows.filter((r) => r.Quotation_No === quotationNo)
       : rows;
 
     if (quotationNo && !filteredRows.length) {
       return res.status(404).json({
-        message: "Save not found"
+        message: "Save not found",
       });
     }
 
     const grouped = {};
 
     filteredRows.forEach((r) => {
-
       if (!grouped[r.Quotation_No]) {
-
         grouped[r.Quotation_No] = {
           header: r,
-          items: []
+          items: [],
         };
-
       }
 
       grouped[r.Quotation_No].items.push({
-
         Item_Name: r.Item_Name,
         SPECIFICATIONS: r.SPECIFICATIONS,
         Qty: r.Qty,
         Unit_Price: r.Unit_Price,
         Total_Price: r.Total_Price,
         HSN_Code: r.HSN_Code,
-        Make: r.Make
-
+        Make: r.Make,
       });
-
     });
 
     res.json({
       success: true,
-      data: Object.values(grouped)
+      data: Object.values(grouped),
     });
-
   } catch (error) {
-
     res.status(500).json({
-      message: "Error fetching save"
+      message: "Error fetching save",
     });
-
   }
-
 };

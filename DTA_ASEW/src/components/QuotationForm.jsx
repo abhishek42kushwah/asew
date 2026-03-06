@@ -15,17 +15,123 @@ import {
   FaHashtag,
   FaUser,
   FaCopy,
+  FaSearch,
+  FaSpinner,
 } from "react-icons/fa";
 import { fetchCustomers } from "../store/slices/customerSlice";
 import { fetchItems } from "../store/slices/itemSlice";
-import { createSave } from "../store/slices/saveSlice";
-import { createResponse } from "../store/slices/responseSlice";
+import { fetchSaves, createSave } from "../store/slices/saveSlice";
+import { fetchResponses, createResponse } from "../store/slices/responseSlice";
 import CustomerModal from "./CustomerModal";
+import Select from "react-select";
+import toast from "react-hot-toast";
 
 const QuotationForm = () => {
   const dispatch = useDispatch();
   const { customers } = useSelector((state) => state.customer);
   const { items: masterItems } = useSelector((state) => state.item);
+  const { saves } = useSelector((state) => state.save);
+  const { responses } = useSelector((state) => state.response);
+
+  const handleSearchQuotation = () => {
+    const searchNo = formData.Quotation_No.trim();
+    if (!searchNo) {
+      toast.error("Please enter a quotation number to search");
+      return;
+    }
+
+    // Search only in saves
+    const allRecords = [...saves];
+    const found = allRecords.find((r) => {
+      const recordNo = r.header?.Quotation_No || r.Quotation_No;
+      return recordNo === searchNo;
+    });
+
+    if (found) {
+      // Extract data
+      const header = found.header || found;
+      const items = found.items || (found.ITEMS ? JSON.parse(found.ITEMS) : []);
+
+      setFormData((prev) => ({
+        ...prev,
+        Customer_Name: header.Customer_Name || "",
+        Buyer_Address: header.Buyer_Address || "",
+        Delivery_Address: header.Delivery_Address || "",
+        GSTIN_UIN: header.GSTIN_UIN || "",
+        Contact_Person: header.Contact_Person || "",
+        Email_Address: header.Email_Address || "",
+        Contact_Mobile: header.Contact_Mobile || "",
+        Discount: header.Discount || 0,
+        DiscountType: header.DiscountType || "%",
+        Freight_Charges: header.Freight_Charges || 0,
+        FreightType: header.FreightType || "Amount",
+        Freight_Note: header.Freight_Note || "",
+        Packaging_Charges: header.Packaging_Charges || 0,
+        PackagingType: header.PackagingType || "Amount",
+        Packaging_Note: header.Packaging_Note || "",
+        Term_Tax: header.Term_Tax || prev.Term_Tax,
+        Term_Payment: header.Term_Payment || prev.Term_Payment,
+        Term_Delivery: header.Term_Delivery || prev.Term_Delivery,
+        Term_Warranty: header.Term_Warranty || prev.Term_Warranty,
+      }));
+
+      // Map items to include unique IDs
+      setLabEquipment(
+        items.map((item, idx) => ({
+          ...item,
+          id: Date.now() + idx,
+          item_name: item.item_name || item.ITEM_NAME || "",
+          qty: Number(item.qty || item.QTY || 1),
+          unit_price: Number(item.unit_price || 0),
+          total_price: Number(item.total_price || 0),
+          nabl: item.nabl || "No",
+        })),
+      );
+
+      toast.success("Quotation found and loaded!");
+    } else {
+      toast.error("Quotation not found");
+    }
+  };
+
+  const customerOptions = customers.map((c) => ({
+    value: c.Customer_Name || c.CUSTOMER_NAME,
+    label: c.Customer_Name || c.CUSTOMER_NAME,
+  }));
+
+  const itemOptions = masterItems.map((mi) => ({
+    value: mi.ITEM_NAME,
+    label: mi.ITEM_NAME,
+  }));
+
+  const customSelectStyles = {
+    control: (provided, state) => ({
+      ...provided,
+      borderColor: state.isFocused ? "#2ecc71" : "#e5e7eb",
+      boxShadow: state.isFocused ? "0 0 0 1px #2ecc71" : "none",
+      "&:hover": {
+        borderColor: "#2ecc71",
+      },
+      borderRadius: "0.375rem",
+      fontSize: "0.875rem",
+      minHeight: "38px",
+    }),
+    menuPortal: (base) => ({ ...base, zIndex: 9999 }),
+    option: (provided, state) => ({
+      ...provided,
+      backgroundColor: state.isSelected
+        ? "#2ecc71"
+        : state.isFocused
+          ? "#f1f8f5"
+          : "white",
+      color: state.isSelected ? "white" : "#374151",
+      "&:active": {
+        backgroundColor: "#2ecc71",
+        color: "white",
+      },
+      cursor: "pointer",
+    }),
+  };
 
   const [formData, setFormData] = useState({
     Date: new Date().toISOString().split("T")[0],
@@ -62,7 +168,7 @@ const QuotationForm = () => {
       total_price: 0,
       image: null,
       hsn: "",
-      nabl: false,
+      nabl: "No",
       make: "",
       discount_percent: 0,
     },
@@ -78,7 +184,39 @@ const QuotationForm = () => {
   useEffect(() => {
     dispatch(fetchCustomers());
     dispatch(fetchItems());
+    dispatch(fetchSaves());
+    dispatch(fetchResponses());
   }, [dispatch]);
+
+  useEffect(() => {
+    if ((saves.length > 0 || responses.length > 0) && !formData.Quotation_No) {
+      const allNos = [
+        ...saves.map((s) => s.header?.Quotation_No || s.Quotation_No),
+        ...responses.map((r) => r.header?.Quotation_No || r.Quotation_No),
+      ].filter(Boolean);
+
+      let maxSeq = 0;
+      allNos.forEach((no) => {
+        const parts = no.split("/");
+        const lastPart = parts[parts.length - 1];
+        const seq = parseInt(lastPart);
+        if (!isNaN(seq) && seq > maxSeq) {
+          maxSeq = seq;
+        }
+      });
+
+      const nextSeq = maxSeq + 1;
+      const year = new Date().getFullYear();
+      const nextYearLastTwo = String(year + 1).slice(-2);
+      const currentYear = String(year);
+      const quotationNo = `${currentYear}-${nextYearLastTwo}/QT/${String(
+        nextSeq,
+      ).padStart(4, "0")}`;
+
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFormData((prev) => ({ ...prev, Quotation_No: quotationNo }));
+    }
+  }, [saves, responses, formData.Quotation_No]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -91,7 +229,6 @@ const QuotationForm = () => {
         );
         if (selectedCustomer) {
           updated.Buyer_Address = selectedCustomer.Buyer_Address || "";
-          updated.Delivery_Address = selectedCustomer.Delivery_Address || "";
           updated.GSTIN_UIN = selectedCustomer.GSTIN_UIN || "";
           updated.Contact_Person = selectedCustomer.Contact_Person || "";
           updated.Email_Address = selectedCustomer.Email_Address || "";
@@ -115,7 +252,7 @@ const QuotationForm = () => {
         updated[index].unit_price = parseFloat(priceStr.replace(/,/g, "")) || 0;
         updated[index].hsn = selectedItem.HSN_CODE || "";
         updated[index].make = selectedItem.MAKE || "";
-        updated[index].nabl = !!selectedItem.NABL;
+        updated[index].nabl = selectedItem.NABL ? "Yes" : "No";
       }
     }
 
@@ -137,6 +274,7 @@ const QuotationForm = () => {
     setLabEquipment([
       ...labEquipment,
       {
+        // eslint-disable-next-line react-hooks/purity
         id: Date.now(),
         item_name: "",
         specifications: "",
@@ -145,7 +283,7 @@ const QuotationForm = () => {
         total_price: 0,
         image: null,
         hsn: "",
-        nabl: false,
+        nabl: "No",
         make: "",
         discount_percent: 0,
       },
@@ -184,24 +322,136 @@ const QuotationForm = () => {
 
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
 
+  // Copy Old Quotation modal state
+  const [showCopyModal, setShowCopyModal] = useState(false);
+  const [copyQuotationNo, setCopyQuotationNo] = useState("");
+  const [copyLoading, setCopyLoading] = useState(false);
+
+  const handleCopyOld = () => {
+    const searchNo = copyQuotationNo.trim();
+    if (!searchNo) {
+      toast.error("Please enter a quotation number");
+      return;
+    }
+
+    setCopyLoading(true);
+
+    // Simulate slight delay for UX feedback
+    setTimeout(() => {
+      const found = responses.find((r) => {
+        const recordNo = r.header?.Quotation_No || r.Quotation_No;
+        return recordNo === searchNo;
+      });
+
+      setCopyLoading(false);
+
+      if (found) {
+        const header = found.header || found;
+        const items =
+          found.items || (found.ITEMS ? JSON.parse(found.ITEMS) : []);
+
+        setFormData((prev) => ({
+          ...prev,
+          Customer_Name: header.Customer_Name || "",
+          Buyer_Address: header.Buyer_Address || "",
+          Delivery_Address: header.Delivery_Address || "",
+          GSTIN_UIN: header.GSTIN_UIN || "",
+          Contact_Person: header.Contact_Person || "",
+          Email_Address: header.Email_Address || "",
+          Contact_Mobile: header.Contact_Mobile || "",
+          Discount: header.Discount || 0,
+          DiscountType: header.DiscountType || "%",
+          Freight_Charges: header.Freight_Charges || 0,
+          FreightType: header.FreightType || "Amount",
+          Freight_Note: header.Freight_Note || "",
+          Packaging_Charges: header.Packaging_Charges || 0,
+          PackagingType: header.PackagingType || "Amount",
+          Packaging_Note: header.Packaging_Note || "",
+          Term_Tax: header.Term_Tax || prev.Term_Tax,
+          Term_Payment: header.Term_Payment || prev.Term_Payment,
+          Term_Delivery: header.Term_Delivery || prev.Term_Delivery,
+          Term_Warranty: header.Term_Warranty || prev.Term_Warranty,
+        }));
+
+        setLabEquipment(
+          items.map((item, idx) => ({
+            id: Date.now() + idx,
+            item_name: item.item_name || item.Item_Name || item.ITEM_NAME || "",
+            specifications: item.specifications || item.SPECIFICATIONS || "",
+            qty: Number(item.qty || item.Qty || item.QTY || 1),
+            unit_price: Number(item.unit_price || item.Unit_Price || 0),
+            total_price: Number(item.total_price || item.Total_Price || 0),
+            hsn: item.hsn || item.HSN_Code || item.HSN_CODE || "",
+            make: item.make || item.Make || item.MAKE || "",
+            nabl: item.nabl || item.NABL || "No",
+            discount_percent: Number(
+              item.discount_percent || item.Item_Discount || 0,
+            ),
+            image: null,
+          })),
+        );
+
+        toast.success(`Quotation "${searchNo}" copied successfully!`);
+        setShowCopyModal(false);
+        setCopyQuotationNo("");
+      } else {
+        toast.error(`Quotation "${searchNo}" not found in responses`);
+      }
+    }, 600);
+  };
+
   const handleSubmit = (actionType) => {
+    // Basic validations
+    if (!formData.Date) {
+      toast.error("Date is required.");
+      return;
+    }
+
+    if (!formData.Customer_Name?.trim()) {
+      toast.error("Please select a Customer before submitting.");
+      return;
+    }
+
+    const validItems = labEquipment.filter(
+      (item) => item.item_name && item.item_name.trim() !== "",
+    );
+
+    if (validItems.length === 0) {
+      toast.error("Please select at least one item for the quotation.");
+      return;
+    }
+
     const data = new FormData();
     Object.keys(formData).forEach((key) => data.append(key, formData[key]));
-    data.append("ITEMS", JSON.stringify(labEquipment));
+    data.append("ITEMS", JSON.stringify(validItems));
     data.append("Subtotal", calculateSubtotal());
     data.append("Total_Amount", calculateGrandTotal());
 
-    // Append images
-    labEquipment.forEach((item) => {
+    // Append images only for valid items
+    validItems.forEach((item) => {
       if (item.image) {
         data.append("Image_URL", item.image);
       }
     });
 
     if (actionType === "save") {
-      dispatch(createSave(data));
+      dispatch(createSave(data))
+        .unwrap()
+        .then(() => {
+          toast.success("Quotation saved successfully!");
+        })
+        .catch((error) => {
+          toast.error(error || "Failed to save quotation");
+        });
     } else if (actionType === "submit") {
-      dispatch(createResponse(data));
+      dispatch(createResponse(data))
+        .unwrap()
+        .then(() => {
+          toast.success("Quotation response submitted successfully!");
+        })
+        .catch((error) => {
+          toast.error(error || "Failed to submit quotation response");
+        });
     }
   };
 
@@ -223,6 +473,77 @@ const QuotationForm = () => {
           setIsCustomerModalOpen(false);
         }}
       />
+
+      {/* Copy Old Quotation Modal */}
+      {showCopyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+            {/* Modal Header */}
+            <div className="bg-[#f39c12] px-6 py-4 flex items-center gap-3">
+              <FaCopy className="text-white text-xl" />
+              <h2 className="text-white text-lg font-bold tracking-wide">
+                Copy Old Quotation
+              </h2>
+            </div>
+
+            {/* Modal Body */}
+            <div className="px-6 py-6 flex flex-col gap-4">
+              <p className="text-gray-600 text-sm leading-relaxed">
+                Enter the{" "}
+                <span className="font-semibold text-gray-800">
+                  OLD Quotation Number
+                </span>{" "}
+                you want to copy:
+                <span className="block mt-1 text-xs text-gray-400 font-mono">
+                  e.g., 2025-26/QT/1250
+                </span>
+              </p>
+
+              <input
+                type="text"
+                value={copyQuotationNo}
+                onChange={(e) => setCopyQuotationNo(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleCopyOld()}
+                placeholder="2025-26/QT/1250"
+                autoFocus
+                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:border-[#f39c12] transition-colors placeholder-gray-300"
+              />
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 pb-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCopyModal(false);
+                  setCopyQuotationNo("");
+                }}
+                disabled={copyLoading}
+                className="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-all disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleCopyOld}
+                disabled={copyLoading}
+                className="px-5 py-2.5 rounded-lg bg-[#f39c12] text-white text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-all disabled:opacity-60 shadow-md"
+              >
+                {copyLoading ? (
+                  <>
+                    <FaSpinner className="animate-spin" /> Searching...
+                  </>
+                ) : (
+                  <>
+                    <FaCopy /> Copy Quotation
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Quotation Details Card */}
       <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.05)] p-8 mb-8">
         <div className="flex items-center justify-center gap-4 mb-10 pb-5 border-b border-gray-100">
@@ -237,7 +558,7 @@ const QuotationForm = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
-          <div className={rowGroupClass}>
+          <div className={`${rowGroupClass} md:col-span-2`}>
             <label className={labelClass}>
               <FaCalendarAlt className="text-gray-500" /> Date
             </label>
@@ -250,11 +571,11 @@ const QuotationForm = () => {
             />
           </div>
 
-          <div className={rowGroupClass}>
+          <div className={`${rowGroupClass} md:col-span-2`}>
             <label className={labelClass}>
               <FaHashtag className="text-gray-500" /> Quotation No.
             </label>
-            <div className="flex gap-2">
+            <div className="flex gap-2 items-center">
               <input
                 type="text"
                 name="Quotation_No"
@@ -264,10 +585,24 @@ const QuotationForm = () => {
                 className={inputClass}
               />
               <button
-                className={`${btnBaseClass} bg-[#f39c12] text-white px-3 py-1.5`}
+                type="button"
+                onClick={() => {
+                  setCopyQuotationNo("");
+                  setShowCopyModal(true);
+                }}
+                className={`${btnBaseClass} bg-[#f39c12] text-white px-4 whitespace-nowrap h-[42px]`}
               >
                 <FaCopy /> Copy Old
               </button>
+              {formData.Quotation_No.trim() && (
+                <button
+                  type="button"
+                  onClick={handleSearchQuotation}
+                  className={`${btnBaseClass} border border-[#3498db] text-[#3498db] bg-transparent px-4 whitespace-nowrap h-[42px]`}
+                >
+                  <FaSearch /> Search Old Quotation
+                </button>
+              )}
             </div>
           </div>
 
@@ -275,27 +610,31 @@ const QuotationForm = () => {
             <label className={labelClass}>
               <FaUser className="text-gray-500" /> Customer Name
             </label>
-            <div className="flex gap-2">
-              <select
-                name="Customer_Name"
-                value={formData.Customer_Name}
-                onChange={handleInputChange}
-                className={`${inputClass} flex-1`}
-              >
-                <option value="">Select Customer</option>
-                {customers.map((c) => (
-                  <option
-                    key={c.id || c.Customer_Name || c.CUSTOMER_NAME}
-                    value={c.Customer_Name || c.CUSTOMER_NAME}
-                  >
-                    {c.Customer_Name || c.CUSTOMER_NAME}
-                  </option>
-                ))}
-              </select>
+            <div className="flex gap-2 flex-1 items-center">
+              <div className="flex-1">
+                <Select
+                  options={customerOptions}
+                  value={customerOptions.find(
+                    (opt) => opt.value === formData.Customer_Name,
+                  )}
+                  onChange={(selected) =>
+                    handleInputChange({
+                      target: {
+                        name: "Customer_Name",
+                        value: selected ? selected.value : "",
+                      },
+                    })
+                  }
+                  styles={customSelectStyles}
+                  placeholder="Search or Select Customer"
+                  isClearable
+                  menuPortalTarget={document.body}
+                />
+              </div>
               <button
                 type="button"
                 onClick={() => setIsCustomerModalOpen(true)}
-                className={`${btnBaseClass} border border-[#3498db] text-[#3498db] bg-transparent px-3 py-1.5 whitespace-nowrap`}
+                className={`${btnBaseClass} border border-[#3498db] text-[#3498db] bg-transparent px-3 py-1.5 whitespace-nowrap h-[38px]`}
               >
                 <FaPlus /> Add Customer
               </button>
@@ -455,27 +794,23 @@ const QuotationForm = () => {
                     {index + 1}
                   </td>
                   <td className="p-2 border border-gray-200">
-                    <select
-                      value={item.item_name}
-                      onChange={(e) =>
+                    <Select
+                      options={itemOptions}
+                      value={itemOptions.find(
+                        (opt) => opt.value === item.item_name,
+                      )}
+                      onChange={(selected) =>
                         handleEquipmentChange(
                           index,
                           "item_name",
-                          e.target.value,
+                          selected ? selected.value : "",
                         )
                       }
-                      className="w-full p-2 border border-gray-200 rounded text-sm focus:outline-none focus:border-[#2ecc71]"
-                    >
-                      <option value="">Select Item</option>
-                      {masterItems.map((mi) => (
-                        <option
-                          key={mi.id || mi.ITEM_NAME}
-                          value={mi.ITEM_NAME}
-                        >
-                          {mi.ITEM_NAME}
-                        </option>
-                      ))}
-                    </select>
+                      styles={customSelectStyles}
+                      placeholder="Select Item"
+                      isClearable
+                      menuPortalTarget={document.body}
+                    />
                   </td>
                   {showFields.hsn && (
                     <td className="p-2 border border-gray-200">
@@ -493,9 +828,13 @@ const QuotationForm = () => {
                     <td className="p-2 border border-gray-200 text-center">
                       <input
                         type="checkbox"
-                        checked={item.nabl}
+                        checked={item.nabl === "Yes"}
                         onChange={(e) =>
-                          handleEquipmentChange(index, "nabl", e.target.checked)
+                          handleEquipmentChange(
+                            index,
+                            "nabl",
+                            e.target.checked ? "Yes" : "No",
+                          )
                         }
                         className="w-4 h-4 mt-1"
                       />

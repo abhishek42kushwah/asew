@@ -11,35 +11,38 @@ exports.createResponse = async (req, res) => {
   try {
     const data = req.body;
 
-    let Image_URL = [];
-    let Generated_PDF = [];
+    let Image_URL = "";
+    let Generated_PDF = "";
 
-    // Upload Images
-    if (req.files?.Image_URL) {
-      Image_URL = await Promise.all(
-        req.files.Image_URL.map((file) =>
-          uploadToDrive(file.buffer, file.originalname, file.mimetype),
-        ),
+    // Upload Image (Single)
+    if (req.files?.Image_URL?.[0]) {
+      const file = req.files.Image_URL[0];
+      Image_URL = await uploadToDrive(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
       );
     }
 
-    // Upload PDF
-    if (req.files?.Generated_PDF) {
-      Generated_PDF = await Promise.all(
-        req.files.Generated_PDF.map((file) =>
-          uploadToDrive(file.buffer, file.originalname, file.mimetype),
-        ),
+    // Upload PDF (Single)
+    if (req.files?.Generated_PDF?.[0]) {
+      const file = req.files.Generated_PDF[0];
+      Generated_PDF = await uploadToDrive(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
       );
     }
 
     // Generate response sequence number (following save pattern)
-    const allRows = await db.getAll(SHEET_NAME);
+    let quotationNo = data.Quotation_No;
 
-    const uniqueNumbers = [...new Set(allRows.map((r) => r.Quotation_No))];
-
-    const nextNumber = uniqueNumbers.length + 1;
-
-    const quotationNo = `2025-26/RS/${String(nextNumber).padStart(4, "0")}`; // Using RS for Response
+    if (!quotationNo) {
+      const allRows = await db.getAll(SHEET_NAME);
+      const uniqueNumbers = [...new Set(allRows.map((r) => r.Quotation_No))];
+      const nextNumber = uniqueNumbers.length + 1;
+      quotationNo = `2025-26/RS/${String(nextNumber).padStart(4, "0")}`; // Using RS for Response
+    }
 
     // Items
     const items = Array.isArray(data.ITEMS)
@@ -85,7 +88,7 @@ exports.createResponse = async (req, res) => {
 
         Subtotal: data.Subtotal,
 
-        Image_URL: JSON.stringify(Image_URL),
+        Image_URL: Image_URL,
 
         Discount: data.Discount,
         GST: data.GST,
@@ -93,7 +96,7 @@ exports.createResponse = async (req, res) => {
         Packaging_Charges: data.Packaging_Charges,
         Total_Amount: data.Total_Amount,
 
-        Generated_PDF: JSON.stringify(Generated_PDF),
+        Generated_PDF: Generated_PDF,
 
         ITEMS: JSON.stringify(items),
 

@@ -4,23 +4,22 @@ require("dotenv").config();
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 
 const createCustomerSheet = async () => {
-
-  const headers = [[
-    "Date",
-    "Customer_Name",
-    "Buyer_Address",
-    "GSTIN_UIN",
-    "PAN_No",
-    "Contact_Person",
-    "Email_Address",
-    "Contact_Mobile",
-    "Delivery_Address",
-    "Created_at",
-    "Updated_at"
-  ]];
+  const headers = [
+    [
+      "Date",
+      "Customer_Name",
+      "Buyer_Address",
+      "GSTIN_UIN",
+      "PAN_No",
+      "Contact_Person",
+      "Email_Address",
+      "Contact_Mobile",
+      "Created_at",
+      "Updated_at",
+    ],
+  ];
 
   try {
-
     // Create sheet
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId: SPREADSHEET_ID,
@@ -29,14 +28,13 @@ const createCustomerSheet = async () => {
           {
             addSheet: {
               properties: {
-                title: "Customer_Master"
-              }
-            }
-          }
-        ]
-      }
+                title: "Customer_Master",
+              },
+            },
+          },
+        ],
+      },
     });
-
   } catch (err) {
     console.log("Customer_Master sheet may already exist");
   }
@@ -47,13 +45,13 @@ const createCustomerSheet = async () => {
     range: "Customer_Master!A1",
     valueInputOption: "RAW",
     requestBody: {
-      values: headers
-    }
+      values: headers,
+    },
   });
 
   console.log("✅ Customer_Master sheet created successfully");
 };
 
 module.exports = {
-  createCustomerSheet
+  createCustomerSheet,
 };

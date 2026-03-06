@@ -19,7 +19,6 @@ const { createCustomerSheet } = require("./src/models/customer.model");
 const { createSaveSheet } = require("./src/models/save.model");
 const { createResponseSheet } = require("./src/models/response.model");
 
-const authRoutes = require("./src/routes/auth.routes");
 
 const itemRoutes = require("./src/routes/item.routes");
 const customerRoutes = require("./src/routes/customer.routes");
@@ -27,7 +26,7 @@ const saveRoutes = require("./src/routes/save.routes");
 const responseRoutes = require("./src/routes/response.routes");
 
 // Routes registration
-app.use("/api/auth", authRoutes);
+
 app.use("/api/item", itemRoutes);
 app.use("/api/customer", customerRoutes);
 app.use("/api/save", saveRoutes);

@@ -33,7 +33,6 @@ const CustomerModal = ({ isOpen, onClose, onSuccess }) => {
       Contact_Person: "",
       Email_Address: "",
       Contact_Mobile: "",
-      Delivery_Address: "",
     },
     validationSchema,
     onSubmit: async (values, { setSubmitting, resetForm }) => {
@@ -176,17 +175,6 @@ const CustomerModal = ({ isOpen, onClose, onSuccess }) => {
                 className={`${inputClass("Buyer_Address")} min-h-[80px]`}
               />
               {errorMsg("Buyer_Address")}
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="text-sm font-semibold text-gray-600">
-                Delivery Address
-              </label>
-              <textarea
-                {...formik.getFieldProps("Delivery_Address")}
-                className={`${inputClass("Delivery_Address")} min-h-[80px]`}
-              />
-              {errorMsg("Delivery_Address")}
             </div>
           </div>
 

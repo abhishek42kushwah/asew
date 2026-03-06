@@ -10,7 +10,6 @@ exports.createCustomer = async (req, res) => {
     const {
       Customer_Name,
       Buyer_Address,
-      Delivery_Address,
       GSTIN_UIN,
       PAN_No,
       Contact_Person,
@@ -22,7 +21,6 @@ exports.createCustomer = async (req, res) => {
       Date: new Date().toLocaleDateString(),
       Customer_Name,
       Buyer_Address,
-      Delivery_Address,
       GSTIN_UIN,
       PAN_No,
       Contact_Person,
