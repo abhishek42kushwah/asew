@@ -25,6 +25,7 @@ import { fetchResponses, createResponse } from "../store/slices/responseSlice";
 import CustomerModal from "./CustomerModal";
 import Select from "react-select";
 import toast from "react-hot-toast";
+import { generateQuotationPDF } from "../utils/pdfGenerator";
 
 const QuotationForm = () => {
   const dispatch = useDispatch();
@@ -1139,7 +1140,16 @@ const QuotationForm = () => {
         >
           <FaPaperPlane /> Submit
         </button>
-        <button className={`${btnBaseClass} bg-[#1fb977] text-white scale-110`}>
+        <button
+          onClick={() => {
+            const totals = {
+              subtotal: calculateSubtotal(),
+              grandTotal: calculateGrandTotal(),
+            };
+            generateQuotationPDF(formData, labEquipment, showFields, totals);
+          }}
+          className={`${btnBaseClass} bg-[#1fb977] text-white scale-110`}
+        >
           <FaFilePdf /> Generate PDF
         </button>
       </div>
