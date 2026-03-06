@@ -1,15 +1,14 @@
 const db = require("../config/db.config");
 const { uploadToDrive } = require("../utils/googleDrive");
 
-const SHEET_NAME = "save";
+const SHEET_NAME = "response";
 
 /**
- * CREATE SAVE (Quotation)
+ * CREATE RESPONSE (Quotation Response)
  */
 
-exports.createSave = async (req, res) => {
+exports.createResponse = async (req, res) => {
   try {
-
     const data = req.body;
 
     let Image_URL = [];
@@ -19,8 +18,8 @@ exports.createSave = async (req, res) => {
     if (req.files?.Image_URL) {
       Image_URL = await Promise.all(
         req.files.Image_URL.map((file) =>
-          uploadToDrive(file.buffer, file.originalname, file.mimetype)
-        )
+          uploadToDrive(file.buffer, file.originalname, file.mimetype),
+        ),
       );
     }
 
@@ -28,37 +27,33 @@ exports.createSave = async (req, res) => {
     if (req.files?.Generated_PDF) {
       Generated_PDF = await Promise.all(
         req.files.Generated_PDF.map((file) =>
-          uploadToDrive(file.buffer, file.originalname, file.mimetype)
-        )
+          uploadToDrive(file.buffer, file.originalname, file.mimetype),
+        ),
       );
     }
 
-    // Generate quotation number
+    // Generate response sequence number (following save pattern)
     const allRows = await db.getAll(SHEET_NAME);
 
-    const uniqueNumbers = [
-      ...new Set(allRows.map((r) => r.Quotation_No))
-    ];
+    const uniqueNumbers = [...new Set(allRows.map((r) => r.Quotation_No))];
 
     const nextNumber = uniqueNumbers.length + 1;
 
-    const quotationNo =
-      `2025-26/QT/${String(nextNumber).padStart(4, "0")}`;
+    const quotationNo = `2025-26/RS/${String(nextNumber).padStart(4, "0")}`; // Using RS for Response
 
     // Items
     const items = Array.isArray(data.ITEMS)
       ? data.ITEMS
       : JSON.parse(data.ITEMS || "[]");
 
-    const insertedRows = [];   // ⭐ collect results
+    const insertedRows = [];
 
     for (const item of items) {
-
       // Auto fetch item master
       const itemData = await db.find(
         "Item_Master",
         "ITEM_NAME",
-        item.item_name
+        item.item_name,
       );
 
       const master = itemData[0] || {};
@@ -72,7 +67,6 @@ exports.createSave = async (req, res) => {
       const totalPrice = unitPrice * item.qty;
 
       const rowData = {
-
         Date: data.Date,
         Quotation_No: quotationNo,
         Customer_Name: data.Customer_Name,
@@ -124,99 +118,80 @@ exports.createSave = async (req, res) => {
         Item_Discount: item.discount || 0,
 
         Term_Payment:
-          data.Term_Payment ||
-          "30% advance & balance at the time of dispatch",
+          data.Term_Payment || "30% advance & balance at the time of dispatch",
 
         NABL: data.NABL,
 
         Created_at: new Date().toISOString(),
         Updated_at: new Date().toISOString(),
-
       };
 
       await db.insertByHeader(SHEET_NAME, rowData);
 
-      insertedRows.push(rowData); // ⭐ push row
-
+      insertedRows.push(rowData);
     }
 
     res.status(201).json({
       success: true,
       quotation_no: quotationNo,
-      message: "Save created successfully",
+      message: "Response created successfully",
       total_items: insertedRows.length,
-      data: insertedRows
+      data: insertedRows,
     });
-
   } catch (error) {
-
     console.error(error);
 
     res.status(500).json({
-      message: "Error creating save"
+      message: "Error creating response",
     });
-
   }
 };
 
-
-exports.getAllSave = async (req, res) => {
-
+exports.getAllResponse = async (req, res) => {
   try {
-
     const { quotationNo } = req.query;
 
     const rows = await db.getAll(SHEET_NAME);
 
-    // FILTER BY QUOTATION
+    // FILTER BY QUOTATION (or Response No in this context)
     const filteredRows = quotationNo
-      ? rows.filter(r => r.Quotation_No === quotationNo)
+      ? rows.filter((r) => r.Quotation_No === quotationNo)
       : rows;
 
     if (quotationNo && !filteredRows.length) {
       return res.status(404).json({
-        message: "Save not found"
+        message: "Response not found",
       });
     }
 
     const grouped = {};
 
     filteredRows.forEach((r) => {
-
       if (!grouped[r.Quotation_No]) {
-
         grouped[r.Quotation_No] = {
           header: r,
-          items: []
+          items: [],
         };
-
       }
 
       grouped[r.Quotation_No].items.push({
-
         Item_Name: r.Item_Name,
         SPECIFICATIONS: r.SPECIFICATIONS,
         Qty: r.Qty,
         Unit_Price: r.Unit_Price,
         Total_Price: r.Total_Price,
         HSN_Code: r.HSN_Code,
-        Make: r.Make
-
+        Make: r.Make,
       });
-
     });
 
     res.json({
       success: true,
-      data: Object.values(grouped)
+      data: Object.values(grouped),
     });
-
   } catch (error) {
-
     res.status(500).json({
-      message: "Error fetching save"
+      message: "Error fetching response",
     });
-
   }
-
 };

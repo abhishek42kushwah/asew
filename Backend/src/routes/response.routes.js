@@ -2,7 +2,7 @@ const express = require("express");
 
 const router = express.Router();
 
-const saveController = require("../controllers/save.controller");
+const responseController = require("../controllers/response.controller");
 
 const multer = require("multer");
 
@@ -16,9 +16,9 @@ router.post(
     { name: "Image_URL", maxCount: 10 },
     { name: "Generated_PDF", maxCount: 1 },
   ]),
-  saveController.createSave,
+  responseController.createResponse,
 );
 
-router.get("/", saveController.getAllSave);
+router.get("/", responseController.getAllResponse);
 
 module.exports = router;
