@@ -196,6 +196,8 @@ exports.getAllSave = async (req, res) => {
         Total_Price: r.Total_Price,
         HSN_Code: r.HSN_Code,
         Make: r.Make,
+        NABL: r.NABL,
+        Item_Discount: r.Item_Discount,
       });
     });
 

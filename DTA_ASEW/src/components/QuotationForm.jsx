@@ -144,6 +144,7 @@ const QuotationForm = () => {
     }),
   };
 
+  const [isSearching, setIsSearching] = useState(false);
   const handleSearchQuotation = () => {
     const searchNo = values.Quotation_No.trim();
     if (!searchNo) {
@@ -151,54 +152,110 @@ const QuotationForm = () => {
       return;
     }
 
-    // Search only in saves
-    const allRecords = [...saves];
-    const found = allRecords.find((r) => {
-      const recordNo = r.header?.Quotation_No || r.Quotation_No;
-      return recordNo === searchNo;
-    });
+    setIsSearching(true);
 
-    if (found) {
-      // Extract data
-      const header = found.header || found;
-      const items = found.items || (found.ITEMS ? JSON.parse(found.ITEMS) : []);
+    // Simulate delay for UI feedback
+    setTimeout(() => {
+      // Search only in saves
+      const found = saves.find((r) => {
+        const recordNo = r.header?.Quotation_No || r.Quotation_No;
+        return recordNo === searchNo;
+      });
 
-      setValues((prev) => ({
-        ...prev,
-        Customer_Name: header.Customer_Name || "",
-        Buyer_Address: header.Buyer_Address || "",
-        Delivery_Address: header.Delivery_Address || "",
-        GSTIN_UIN: header.GSTIN_UIN || "",
-        Contact_Person: header.Contact_Person || "",
-        Email_Address: header.Email_Address || "",
-        Contact_Mobile: header.Contact_Mobile || "",
-        Discount: header.Discount || 0,
-        DiscountType: header.DiscountType || "%",
-        Freight_Charges: header.Freight_Charges || 0,
-        FreightType: header.FreightType || "Amount",
-        Freight_Note: header.Freight_Note || "",
-        Packaging_Charges: header.Packaging_Charges || 0,
-        PackagingType: header.PackagingType || "Amount",
-        Packaging_Note: header.Packaging_Note || "",
-        Term_Tax: header.Term_Tax || prev.Term_Tax,
-        Term_Payment: header.Term_Payment || prev.Term_Payment,
-        Term_Delivery: header.Term_Delivery || prev.Term_Delivery,
-        Term_Warranty: header.Term_Warranty || prev.Term_Warranty,
-        labEquipment: items.map((item, idx) => ({
-          ...item,
-          id: Date.now() + idx,
-          item_name: item.item_name || item.ITEM_NAME || "",
-          qty: Number(item.qty || item.QTY || 1),
-          unit_price: Number(item.unit_price || 0),
-          total_price: Number(item.total_price || 0),
-          nabl: item.nabl || "No",
-        })),
-      }));
+      if (found) {
+        // Extract data
+        const header = found.header || found;
+        // PRIORITIZE stringified ITEMS if available in header (more robust)
+        let items = [];
+        if (header.ITEMS) {
+          try {
+            items =
+              typeof header.ITEMS === "string"
+                ? JSON.parse(header.ITEMS)
+                : header.ITEMS;
+          } catch (e) {
+            console.error("JSON parse error for ITEMS:", e);
+          }
+        }
 
-      toast.success("Quotation found and loaded!");
-    } else {
-      toast.error("Quotation not found");
-    }
+        // Fallback to row-based items if JSON is empty/null
+        if (!items || items.length === 0) {
+          items = found.items || [];
+        }
+
+        setValues((prev) => ({
+          ...prev,
+          Customer_Name: header.Customer_Name || "",
+          Buyer_Address: header.Buyer_Address || "",
+          Delivery_Address: header.Delivery_Address || "",
+          GSTIN_UIN: header.GSTIN_UIN || "",
+          Contact_Person: header.Contact_Person || "",
+          Email_Address: header.Email_Address || "",
+          Contact_Mobile: header.Contact_Mobile || "",
+          Discount: header.Discount || 0,
+          DiscountType: header.DiscountType || "%",
+          Freight_Charges: header.Freight_Charges || 0,
+          FreightType: header.FreightType || "Amount",
+          Freight_Note: header.Freight_Note || "",
+          Packaging_Charges: header.Packaging_Charges || 0,
+          PackagingType: header.PackagingType || "Amount",
+          Packaging_Note: header.Packaging_Note || "",
+          Term_Tax: header.Term_Tax || prev.Term_Tax,
+          Term_Payment: header.Term_Payment || prev.Term_Payment,
+          Term_Delivery: header.Term_Delivery || prev.Term_Delivery,
+          Term_Warranty: header.Term_Warranty || prev.Term_Warranty,
+          labEquipment: items.map((item, idx) => ({
+            id: Date.now() + idx,
+            // Backend stores as Item_Name (PascalCase); also cover camelCase & UPPERCASE
+            item_name: item.item_name || item.Item_Name || item.ITEM_NAME || "",
+            specifications: item.specifications || item.SPECIFICATIONS || "",
+            qty: Number(item.qty || item.Qty || item.QTY || 1),
+            unit_price: Number(
+              item.unit_price || item.Unit_Price || item.unitPrice || 0,
+            ),
+            total_price: Number(item.total_price || item.Total_Price || 0),
+            // Backend stores as HSN_Code
+            hsn: item.hsn || item.HSN_Code || item.HSN_CODE || "",
+            make: item.make || item.Make || item.MAKE || "",
+            nabl: item.nabl || item.NABL || "No",
+            // Backend stores as Item_Discount
+            discount_percent: Number(
+              item.discount_percent ||
+                item.Item_Discount ||
+                item.Discount_Percent ||
+                0,
+            ),
+            image: null,
+          })),
+        }));
+
+        // Auto-tick checkboxes based on data
+        const hasHSN = items.some((i) => i.hsn || i.HSN_Code || i.HSN_CODE);
+        const hasNABL = items.some(
+          (i) => (i.nabl || i.NABL) && (i.nabl || i.NABL) !== "No",
+        );
+        const hasMake = items.some((i) => i.make || i.Make || i.MAKE);
+        const hasDiscount = items.some(
+          (i) =>
+            Number(
+              i.discount_percent || i.Item_Discount || i.Discount_Percent,
+            ) > 0,
+        );
+
+        setShowFields({
+          hsn: !!hasHSN,
+          nabl: !!hasNABL,
+          make: !!hasMake,
+          discount: !!hasDiscount,
+        });
+
+        setIsSearching(false);
+        toast.success("Quotation found and loaded!");
+      } else {
+        setIsSearching(false);
+        toast.error("Quotation not found");
+      }
+    }, 600);
   };
 
   const [showFields, setShowFields] = useState({
@@ -431,6 +488,32 @@ const QuotationForm = () => {
           })),
         }));
 
+        // Auto-tick checkboxes based on data
+        const hasHSN = items.some((i) => i.hsn || i.HSN_Code || i.HSN_CODE);
+        const hasNABL = items.some((i) => i.nabl || i.NABL);
+        const hasMake = items.some((i) => i.make || i.Make || i.MAKE);
+        const hasDiscount = items.some(
+          (i) =>
+            i.discount_percent ||
+            i.Item_Discount ||
+            i.Discount_Percent ||
+            i.discount,
+        );
+
+        setShowFields({
+          hsn: !!hasHSN,
+          nabl: items.some(
+            (i) => (i.nabl || i.NABL) && (i.nabl || i.NABL) !== "No",
+          ),
+          make: !!hasMake,
+          discount: items.some(
+            (i) =>
+              Number(
+                i.discount_percent || i.Item_Discount || i.Discount_Percent,
+              ) > 0,
+          ),
+        });
+
         toast.success(`Quotation "${searchNo}" copied successfully!`);
         setShowCopyModal(false);
         setCopyQuotationNo("");
@@ -585,6 +668,26 @@ const QuotationForm = () => {
   return (
     <FormikProvider value={formik}>
       <div className="max-w-[1200px] mx-auto my-5 px-5 font-sans text-gray-800 relative">
+        {/* Global Loader Overlay */}
+        {isSearching && (
+          <div className="fixed inset-0 z-100 flex flex-col items-center justify-center bg-white/80 backdrop-blur-md animate-in fade-in duration-300">
+            <div className="relative">
+              <div className="w-20 h-20 border-4 border-[#2ecc71]/20 border-t-[#2ecc71] rounded-full animate-spin"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <FaSearch className="text-[#2ecc71] text-2xl animate-pulse" />
+              </div>
+            </div>
+            <div className="mt-6 flex flex-col items-center gap-2">
+              <h3 className="text-xl font-bold text-gray-800 tracking-tight">
+                Fetching Data
+              </h3>
+              <p className="text-gray-500 text-sm animate-pulse">
+                Please wait while we retrieve your quotation...
+              </p>
+            </div>
+          </div>
+        )}
+
         <CustomerModal
           isOpen={isCustomerModalOpen}
           onClose={() => setIsCustomerModalOpen(false)}
@@ -594,750 +697,782 @@ const QuotationForm = () => {
           }}
         />
 
-      {/* Copy Old Quotation Modal */}
-      {showCopyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
-            {/* Modal Header */}
-            <div className="bg-[#f39c12] px-6 py-4 flex items-center gap-3">
-              <FaCopy className="text-white text-xl" />
-              <h2 className="text-white text-lg font-bold tracking-wide">
-                Copy Old Quotation
-              </h2>
-            </div>
+        {/* Copy Old Quotation Modal */}
+        {showCopyModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
+              {/* Modal Header */}
+              <div className="bg-[#f39c12] px-6 py-4 flex items-center gap-3">
+                <FaCopy className="text-white text-xl" />
+                <h2 className="text-white text-lg font-bold tracking-wide">
+                  Copy Old Quotation
+                </h2>
+              </div>
 
-            {/* Modal Body */}
-            <div className="px-6 py-6 flex flex-col gap-4">
-              <p className="text-gray-600 text-sm leading-relaxed">
-                Enter the{" "}
-                <span className="font-semibold text-gray-800">
-                  OLD Quotation Number
-                </span>{" "}
-                you want to copy:
-                <span className="block mt-1 text-xs text-gray-400 font-mono">
-                  e.g., 2025-26/QT/1250
-                </span>
-              </p>
+              {/* Modal Body */}
+              <div className="px-6 py-6 flex flex-col gap-4">
+                <p className="text-gray-600 text-sm leading-relaxed">
+                  Enter the{" "}
+                  <span className="font-semibold text-gray-800">
+                    OLD Quotation Number
+                  </span>{" "}
+                  you want to copy:
+                  <span className="block mt-1 text-xs text-gray-400 font-mono">
+                    e.g., 2025-26/QT/1250
+                  </span>
+                </p>
 
-              <input
-                type="text"
-                value={copyQuotationNo}
-                onChange={(e) => setCopyQuotationNo(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleCopyOld()}
-                placeholder="2025-26/QT/0001"
-                autoFocus
-                className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:border-[#f39c12] transition-colors placeholder-gray-300"
-              />
-            </div>
-
-            {/* Modal Footer */}
-            <div className="px-6 pb-6 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCopyModal(false);
-                  setCopyQuotationNo("");
-                }}
-                disabled={copyLoading}
-                className="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-all disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleCopyOld}
-                disabled={copyLoading}
-                className="px-5 py-2.5 rounded-lg bg-[#f39c12] text-white text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-all disabled:opacity-60 shadow-md"
-              >
-                {copyLoading ? (
-                  <>
-                    <FaSpinner className="animate-spin" /> Searching...
-                  </>
-                ) : (
-                  <>
-                    <FaCopy /> Copy Quotation
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Quotation Details Card */}
-      <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.05)] p-8 mb-8">
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-8 sm:mb-10 pb-5 border-b border-gray-100 text-center sm:text-left">
-          <FaFileAlt size={30} className="text-gray-700 sm:size-[35px]" />
-          <h1 className="text-2xl sm:text-3xl md:text-4xl tracking-tight text-gray-800 uppercase font-bold">
-            ASEW QUOTATION FORM
-          </h1>
-        </div>
-
-        <div className="flex items-center justify-center gap-2.5 text-[#2ecc71] text-xl sm:text-2xl font-semibold mb-6 sm:mb-8">
-          <FaInfoCircle /> Quotation Details
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-5 sm:gap-y-6">
-          <div className={`${rowGroupClass} md:col-span-2`}>
-            <label className={labelClass}>
-              <FaCalendarAlt className="text-gray-500" /> Date
-            </label>
-            <input
-              type="date"
-              name="Date"
-              value={values.Date}
-              onChange={handleInputChange}
-              onBlur={() => setFieldTouched("Date")}
-              className={`${inputClass} ${touched.Date && errors.Date ? "border-red-500 text-red-600" : ""}`}
-            />
-            {touched.Date && errors.Date && (
-              <div className="text-red-500 text-[10px] mt-1">{errors.Date}</div>
-            )}
-          </div>
-
-          <div className={`${rowGroupClass} md:col-span-2`}>
-            <label className={labelClass}>
-              <FaHashtag className="text-gray-500" /> Quotation No.
-            </label>
-            <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-              <div className="flex-1 flex flex-col">
                 <input
                   type="text"
-                  name="Quotation_No"
-                  value={values.Quotation_No}
-                  onChange={handleInputChange}
-                  onBlur={() => setFieldTouched("Quotation_No")}
-                  placeholder="Enter or Generate"
-                  className={`${inputClass} ${touched.Quotation_No && errors.Quotation_No ? "border-red-500 text-red-600" : ""}`}
+                  value={copyQuotationNo}
+                  onChange={(e) => setCopyQuotationNo(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleCopyOld()}
+                  placeholder="2025-26/QT/0001"
+                  autoFocus
+                  className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:border-[#f39c12] transition-colors placeholder-gray-300"
                 />
-                {touched.Quotation_No && errors.Quotation_No && (
-                  <div className="text-red-500 text-[10px] mt-1">
-                    {errors.Quotation_No}
-                  </div>
-                )}
               </div>
-              <div className="flex gap-2">
+
+              {/* Modal Footer */}
+              <div className="px-6 pb-6 flex justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => {
+                    setShowCopyModal(false);
                     setCopyQuotationNo("");
-                    setShowCopyModal(true);
                   }}
-                  className={`${btnBaseClass} bg-[#f39c12] text-white flex-1 sm:px-4 whitespace-nowrap h-[38px] sm:h-[42px]`}
+                  disabled={copyLoading}
+                  className="px-5 py-2.5 rounded-lg border border-gray-300 text-gray-600 text-sm font-semibold hover:bg-gray-50 transition-all disabled:opacity-50"
                 >
-                  <FaCopy /> Copy Old
+                  Cancel
                 </button>
-                {values.Quotation_No.trim() && (
-                  <button
-                    type="button"
-                    onClick={handleSearchQuotation}
-                    className={`${btnBaseClass} border border-[#3498db] text-[#3498db] bg-transparent flex-1 sm:px-4 whitespace-nowrap h-[38px] sm:h-[42px]`}
-                  >
-                    <FaSearch /> Search Old
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex flex-col sm:grid sm:grid-cols-[140px_1fr] sm:items-center gap-2 sm:gap-4 md:col-span-2">
-            <label className={labelClass}>
-              <FaUser className="text-gray-500" /> Customer
-            </label>
-            <div className="flex flex-col sm:flex-row gap-2 flex-1 sm:items-center">
-              <div className="flex-1 flex flex-col">
-                <Select
-                  options={customerOptions}
-                  value={customerOptions.find(
-                    (opt) => opt.value === values.Customer_Name,
+                <button
+                  type="button"
+                  onClick={handleCopyOld}
+                  disabled={copyLoading}
+                  className="px-5 py-2.5 rounded-lg bg-[#f39c12] text-white text-sm font-semibold flex items-center gap-2 hover:opacity-90 transition-all disabled:opacity-60 shadow-md"
+                >
+                  {copyLoading ? (
+                    <>
+                      <FaSpinner className="animate-spin" /> Searching...
+                    </>
+                  ) : (
+                    <>
+                      <FaCopy /> Copy Quotation
+                    </>
                   )}
-                  onChange={(selected) =>
-                    handleInputChange({
-                      target: {
-                        name: "Customer_Name",
-                        value: selected ? selected.value : "",
-                      },
-                    })
-                  }
-                  onBlur={() => setFieldTouched("Customer_Name")}
-                  styles={customSelectStyles}
-                  placeholder="Select Customer"
-                  isClearable
-                  menuPortalTarget={document.body}
-                />
-                {touched.Customer_Name && errors.Customer_Name && (
-                  <div className="text-red-500 text-[10px] mt-1">
-                    {errors.Customer_Name}
-                  </div>
-                )}
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsCustomerModalOpen(true)}
-                className={`${btnBaseClass} border border-[#3498db] text-[#3498db] bg-transparent whitespace-nowrap h-[38px] w-full sm:w-auto`}
-              >
-                <FaPlus /> Add New
-              </button>
             </div>
           </div>
+        )}
 
-          <div className={rowGroupClass}>
-            <label className={labelClass}>Buyer Address</label>
-            <textarea
-              name="Buyer_Address"
-              value={values.Buyer_Address}
-              onChange={handleInputChange}
-              placeholder="Full address of buyer"
-              className={`${inputClass} min-h-[80px]`}
-            ></textarea>
+        {/* Quotation Details Card */}
+        <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.05)] p-8 mb-8">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-8 sm:mb-10 pb-5 border-b border-gray-100 text-center sm:text-left">
+            <FaFileAlt size={30} className="text-gray-700 sm:size-[35px]" />
+            <h1 className="text-2xl sm:text-3xl md:text-4xl tracking-tight text-gray-800 uppercase font-bold">
+              ASEW QUOTATION FORM
+            </h1>
           </div>
 
-          <div className={rowGroupClass}>
-            <label className={labelClass}>Delivery Address</label>
-            <textarea
-              name="Delivery_Address"
-              value={values.Delivery_Address}
-              onChange={handleInputChange}
-              placeholder="Full delivery address"
-              className={`${inputClass} min-h-[80px]`}
-            ></textarea>
+          <div className="flex items-center justify-center gap-2.5 text-[#2ecc71] text-xl sm:text-2xl font-semibold mb-6 sm:mb-8">
+            <FaInfoCircle /> Quotation Details
           </div>
 
-          <div className={rowGroupClass}>
-            <label className={labelClass}>GSTIN/UIN</label>
-            <input
-              type="text"
-              name="GSTIN_UIN"
-              value={values.GSTIN_UIN}
-              onChange={handleInputChange}
-              className={inputClass}
-            />
-          </div>
-
-          <div className={rowGroupClass}>
-            <label className={labelClass}>Contact Person</label>
-            <input
-              type="text"
-              name="Contact_Person"
-              value={values.Contact_Person}
-              onChange={handleInputChange}
-              className={inputClass}
-            />
-          </div>
-
-          <div className={rowGroupClass}>
-            <label className={labelClass}>Email Address</label>
-            <div className="flex flex-col">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-5 sm:gap-y-6">
+            <div className={`${rowGroupClass} md:col-span-2`}>
+              <label className={labelClass}>
+                <FaCalendarAlt className="text-gray-500" /> Date
+              </label>
               <input
-                type="email"
-                name="Email_Address"
-                value={values.Email_Address}
+                type="date"
+                name="Date"
+                value={values.Date}
                 onChange={handleInputChange}
-                onBlur={() => setFieldTouched("Email_Address")}
-                className={`${inputClass} ${touched.Email_Address && errors.Email_Address ? "border-red-500 text-red-600" : ""}`}
+                onBlur={() => setFieldTouched("Date")}
+                className={`${inputClass} ${touched.Date && errors.Date ? "border-red-500 text-red-600" : ""}`}
               />
-              {touched.Email_Address && errors.Email_Address && (
+              {touched.Date && errors.Date && (
                 <div className="text-red-500 text-[10px] mt-1">
-                  {errors.Email_Address}
+                  {errors.Date}
                 </div>
               )}
             </div>
-          </div>
 
-          <div className={rowGroupClass}>
-            <label className={labelClass}>Contact Mobile</label>
-            <input
-              type="text"
-              name="Contact_Mobile"
-              value={values.Contact_Mobile}
-              onChange={handleInputChange}
-              className={inputClass}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Lab Equipment Section */}
-      <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.05)] p-8 mb-8">
-        <div className="flex items-center justify-center gap-2.5 text-[#2ecc71] text-2xl font-semibold mb-8">
-          <FaListUl /> List of Lab Equipment
-        </div>
-
-        <div className="flex flex-wrap justify-start sm:justify-end gap-3 sm:gap-6 mb-6">
-          {["hsn", "nabl", "make", "discount"].map((field) => (
-            <label
-              key={field}
-              className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 cursor-pointer bg-gray-50 px-2 py-1 rounded-md border border-gray-100 sm:bg-transparent sm:p-0 sm:border-0"
-            >
-              <input
-                type="checkbox"
-                checked={showFields[field]}
-                onChange={(e) =>
-                  setShowFields((prev) => ({
-                    ...prev,
-                    [field]: e.target.checked,
-                  }))
-                }
-                className="w-3.5 h-3.5 sm:w-4 sm:h-4"
-              />
-              {field.toUpperCase()}
-            </label>
-          ))}
-        </div>
-
-        <div className="w-full overflow-x-auto rounded-lg border border-gray-200 mb-5">
-          <table className="w-full border-collapse table-fixed min-w-[1000px]">
-            <thead>
-              <tr className="bg-[#6c5ce7] text-white">
-                <th className="w-[60px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
-                  Sr. No.
-                </th>
-                <th className="w-[250px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
-                  Item
-                </th>
-                {showFields.hsn && (
-                  <th className="w-[120px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
-                    HSN/SAC
-                  </th>
-                )}
-                {showFields.nabl && (
-                  <th className="w-[100px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
-                    NABL
-                  </th>
-                )}
-                {showFields.make && (
-                  <th className="w-[120px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
-                    Make
-                  </th>
-                )}
-                <th className="w-[250px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
-                  Specifications
-                </th>
-                <th className="w-[80px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
-                  Qty.
-                </th>
-                <th className="w-[120px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
-                  Unit Price
-                </th>
-                {showFields.discount && (
-                  <th className="w-[100px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
-                    Disc. %
-                  </th>
-                )}
-                <th className="w-[140px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
-                  Total Price
-                </th>
-                <th className="w-[200px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
-                  Image
-                </th>
-                <th className="w-[80px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
-                  Action
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {values.labEquipment.map((item, index) => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="p-2 border border-gray-200 text-center">
-                    {index + 1}
-                  </td>
-                  <td className="p-2 border border-gray-200">
-                    <div className="flex flex-col">
-                      <Select
-                        options={itemOptions}
-                        value={itemOptions.find(
-                          (opt) => opt.value === item.item_name,
-                        )}
-                        onChange={(selected) =>
-                          handleEquipmentChange(
-                            index,
-                            "item_name",
-                            selected ? selected.value : "",
-                          )
-                        }
-                        onBlur={() => setFieldTouched(`labEquipment[${index}].item_name`)}
-                        styles={customSelectStyles}
-                        placeholder="Select Item"
-                        isClearable
-                        menuPortalTarget={document.body}
-                        className={`${touched.labEquipment?.[index]?.item_name && errors.labEquipment?.[index]?.item_name ? "border-red-500 rounded" : ""}`}
-                      />
-                      {touched.labEquipment?.[index]?.item_name && errors.labEquipment?.[index]?.item_name && (
-                        <div className="text-red-500 text-[9px] mt-0.5">
-                          {errors.labEquipment[index].item_name}
-                        </div>
-                      )}
+            <div className={`${rowGroupClass} md:col-span-2`}>
+              <label className={labelClass}>
+                <FaHashtag className="text-gray-500" /> Quotation No.
+              </label>
+              <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+                <div className="flex-1 flex flex-col">
+                  <input
+                    type="text"
+                    name="Quotation_No"
+                    value={values.Quotation_No}
+                    onChange={handleInputChange}
+                    onBlur={() => setFieldTouched("Quotation_No")}
+                    placeholder="Enter or Generate"
+                    className={`${inputClass} ${touched.Quotation_No && errors.Quotation_No ? "border-red-500 text-red-600" : ""}`}
+                  />
+                  {touched.Quotation_No && errors.Quotation_No && (
+                    <div className="text-red-500 text-[10px] mt-1">
+                      {errors.Quotation_No}
                     </div>
-                  </td>
-                  {showFields.hsn && (
-                    <td className="p-2 border border-gray-200">
-                      <input
-                        type="text"
-                        value={item.hsn}
-                        onChange={(e) =>
-                          handleEquipmentChange(index, "hsn", e.target.value)
-                        }
-                        className="w-full p-2 border border-gray-200 rounded text-sm"
-                      />
-                    </td>
                   )}
-                  {showFields.nabl && (
-                    <td className="p-2 border border-gray-200">
-                      <input
-                        type="text"
-                        value={item.nabl}
-                        onChange={(e) =>
-                          handleEquipmentChange(index, "nabl", e.target.value)
-                        }
-                        className="w-full p-2 border border-gray-200 rounded text-sm"
-                      />
-                    </td>
-                  )}
-                  {showFields.make && (
-                    <td className="p-2 border border-gray-200">
-                      <input
-                        type="text"
-                        value={item.make}
-                        onChange={(e) =>
-                          handleEquipmentChange(index, "make", e.target.value)
-                        }
-                        className="w-full p-2 border border-gray-200 rounded text-sm"
-                      />
-                    </td>
-                  )}
-                  <td className="p-2 border border-gray-200">
-                    <input
-                      type="text"
-                      value={item.specifications}
-                      onChange={(e) =>
-                        handleEquipmentChange(
-                          index,
-                          "specifications",
-                          e.target.value,
-                        )
-                      }
-                      className="w-full p-2 border border-gray-200 rounded text-sm"
-                    />
-                  </td>
-                  <td className="p-2 border border-gray-200 text-center">
-                    <div className="flex flex-col">
-                      <input
-                        type="number"
-                        value={item.qty}
-                        min="1"
-                        onChange={(e) =>
-                          handleEquipmentChange(
-                            index,
-                            "qty",
-                            Number(e.target.value),
-                          )
-                        }
-                        onBlur={() => setFieldTouched(`labEquipment[${index}].qty`)}
-                        className={`w-full p-2 border rounded text-sm text-center ${touched.labEquipment?.[index]?.qty && errors.labEquipment?.[index]?.qty ? "border-red-500" : "border-gray-200"}`}
-                      />
-                      {touched.labEquipment?.[index]?.qty && errors.labEquipment?.[index]?.qty && (
-                        <div className="text-red-500 text-[9px] mt-0.5">
-                          {errors.labEquipment[index].qty}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="p-2 border border-gray-200">
-                    <div className="flex flex-col">
-                      <input
-                        type="number"
-                        value={item.unit_price}
-                        onChange={(e) =>
-                          handleEquipmentChange(
-                            index,
-                            "unit_price",
-                            Number(e.target.value),
-                          )
-                        }
-                        onBlur={() => setFieldTouched(`labEquipment[${index}].unit_price`)}
-                        className={`w-full p-2 border rounded text-sm text-right ${touched.labEquipment?.[index]?.unit_price && errors.labEquipment?.[index]?.unit_price ? "border-red-500" : "border-gray-200"}`}
-                      />
-                      {touched.labEquipment?.[index]?.unit_price && errors.labEquipment?.[index]?.unit_price && (
-                        <div className="text-red-500 text-[9px] mt-0.5">
-                          {errors.labEquipment[index].unit_price}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  {showFields.discount && (
-                    <td className="p-2 border border-gray-200">
-                      <input
-                        type="number"
-                        value={item.discount_percent}
-                        onChange={(e) =>
-                          handleEquipmentChange(
-                            index,
-                            "discount_percent",
-                            Number(e.target.value),
-                          )
-                        }
-                        className="w-full p-2 border border-gray-200 rounded text-sm text-center"
-                      />
-                    </td>
-                  )}
-                  <td className="p-2 border border-gray-200">
-                    <input
-                      type="number"
-                      value={item.total_price}
-                      readOnly
-                      className="w-full p-2 bg-gray-50 border border-gray-200 rounded text-sm text-right font-semibold"
-                    />
-                  </td>
-                  <td className="p-2 border border-gray-200">
-                    <input
-                      type="file"
-                      onChange={(e) =>
-                        handleEquipmentChange(index, "image", e.target.files[0])
-                      }
-                      className="text-xs"
-                    />
-                  </td>
-                  <td className="p-2 border border-gray-200 text-center">
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCopyQuotationNo("");
+                      setShowCopyModal(true);
+                    }}
+                    className={`${btnBaseClass} bg-[#f39c12] text-white flex-1 sm:px-4 whitespace-nowrap h-[38px] sm:h-[42px]`}
+                  >
+                    <FaCopy /> Copy Old
+                  </button>
+                  {values.Quotation_No.trim() && (
                     <button
                       type="button"
-                      onClick={() => removeEquipment(index)}
-                      className="bg-red-500 text-white p-2.5 rounded hover:bg-red-600 transition-colors"
+                      onClick={handleSearchQuotation}
+                      disabled={isSearching}
+                      className={`${btnBaseClass} border border-[#3498db] text-[#3498db] bg-transparent flex-1 sm:px-4 whitespace-nowrap h-[38px] sm:h-[42px] disabled:opacity-50`}
                     >
-                      <FaTrash />
+                      {isSearching ? (
+                        <>
+                          <FaSpinner className="animate-spin" /> Searching...
+                        </>
+                      ) : (
+                        <>
+                          <FaSearch /> Search Old
+                        </>
+                      )}
                     </button>
-                  </td>
-                </tr>
-              ))}
-              <tr className="bg-[#f1f8f5] font-bold">
-                <td
-                  colSpan={
-                    2 +
-                    (showFields.hsn ? 1 : 0) +
-                    (showFields.nabl ? 1 : 0) +
-                    (showFields.make ? 1 : 0) +
-                    1
-                  }
-                  className="p-3 text-right pr-4"
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:grid sm:grid-cols-[140px_1fr] sm:items-center gap-2 sm:gap-4 md:col-span-2">
+              <label className={labelClass}>
+                <FaUser className="text-gray-500" /> Customer
+              </label>
+              <div className="flex flex-col sm:flex-row gap-2 flex-1 sm:items-center">
+                <div className="flex-1 flex flex-col">
+                  <Select
+                    options={customerOptions}
+                    value={customerOptions.find(
+                      (opt) => opt.value === values.Customer_Name,
+                    )}
+                    onChange={(selected) =>
+                      handleInputChange({
+                        target: {
+                          name: "Customer_Name",
+                          value: selected ? selected.value : "",
+                        },
+                      })
+                    }
+                    onBlur={() => setFieldTouched("Customer_Name")}
+                    styles={customSelectStyles}
+                    placeholder="Select Customer"
+                    isClearable
+                    menuPortalTarget={document.body}
+                  />
+                  {touched.Customer_Name && errors.Customer_Name && (
+                    <div className="text-red-500 text-[10px] mt-1">
+                      {errors.Customer_Name}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsCustomerModalOpen(true)}
+                  className={`${btnBaseClass} border border-[#3498db] text-[#3498db] bg-transparent whitespace-nowrap h-[38px] w-full sm:w-auto`}
                 >
-                  <FaCalculator className="inline mr-2" /> Total
-                </td>
-                <td className="text-center">
-                  {values.labEquipment.reduce((sum, item) => sum + item.qty, 0)}
-                </td>
-                <td className="text-center">-</td>
-                {showFields.discount && <td className="text-center">-</td>}
-                <td className="text-center text-[#2ecc71]">
-                  {calculateSubtotal()}
-                </td>
-                <td colSpan={2}></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <button
-          onClick={addMoreEquipment}
-          className={`${btnBaseClass} bg-[#2ecc71] text-white`}
-        >
-          <FaPlus /> Add More
-        </button>
-      </div>
-
-      {/* Additional Charges Card */}
-      <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.05)] p-8 mb-8">
-        <div className="flex items-center justify-center gap-2.5 text-[#2ecc71] text-2xl font-semibold mb-8">
-          <FaCalculator /> Additional Charges
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
-          <div className="flex flex-col gap-3">
-            <div className="font-semibold text-gray-700 text-sm sm:text-base">
-              % Discount
+                  <FaPlus /> Add New
+                </button>
+              </div>
             </div>
-            <div className="flex border border-gray-200 rounded-md overflow-hidden h-[42px]">
+
+            <div className={rowGroupClass}>
+              <label className={labelClass}>Buyer Address</label>
+              <textarea
+                name="Buyer_Address"
+                value={values.Buyer_Address}
+                onChange={handleInputChange}
+                placeholder="Full address of buyer"
+                className={`${inputClass} min-h-[80px]`}
+              ></textarea>
+            </div>
+
+            <div className={rowGroupClass}>
+              <label className={labelClass}>Delivery Address</label>
+              <textarea
+                name="Delivery_Address"
+                value={values.Delivery_Address}
+                onChange={handleInputChange}
+                placeholder="Full delivery address"
+                className={`${inputClass} min-h-[80px]`}
+              ></textarea>
+            </div>
+
+            <div className={rowGroupClass}>
+              <label className={labelClass}>GSTIN/UIN</label>
               <input
-                type="number"
-                name="Discount"
-                value={values.Discount}
+                type="text"
+                name="GSTIN_UIN"
+                value={values.GSTIN_UIN}
                 onChange={handleInputChange}
-                className="flex-1 p-2 focus:outline-none px-4 text-sm sm:text-base"
+                className={inputClass}
               />
-              <select
-                name="DiscountType"
-                value={values.DiscountType}
-                onChange={handleInputChange}
-                className="border-l border-gray-200 bg-gray-50 p-2 focus:outline-none text-xs sm:text-sm"
-              >
-                <option value="%">%</option>
-                <option value="Amount">Amount</option>
-              </select>
             </div>
-          </div>
 
-          <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 font-semibold text-gray-700 text-sm sm:text-base">
-              <FaPaperPlane className="text-gray-500" /> Freight Charges
-            </div>
-            <div className="flex border border-gray-200 rounded-md overflow-hidden h-[42px]">
+            <div className={rowGroupClass}>
+              <label className={labelClass}>Contact Person</label>
               <input
-                type="number"
-                name="Freight_Charges"
-                value={values.Freight_Charges}
+                type="text"
+                name="Contact_Person"
+                value={values.Contact_Person}
                 onChange={handleInputChange}
-                className="flex-1 p-2 focus:outline-none px-4 text-sm sm:text-base"
+                className={inputClass}
               />
-              <select
-                name="FreightType"
-                value={values.FreightType}
-                onChange={handleInputChange}
-                className="border-l border-gray-200 bg-gray-50 p-2 focus:outline-none text-xs sm:text-sm"
-              >
-                <option value="Amount">Amount</option>
-                <option value="%">%</option>
-              </select>
             </div>
-            <input
-              type="text"
-              name="Freight_Note"
-              placeholder="Note (e.g. To Pay)"
-              value={values.Freight_Note}
-              onChange={handleInputChange}
-              className={inputClass}
-            />
-          </div>
 
-          <div className="flex flex-col gap-3">
-            <div className="font-semibold text-gray-700 text-sm sm:text-base">
-              Packaging Charges
+            <div className={rowGroupClass}>
+              <label className={labelClass}>Email Address</label>
+              <div className="flex flex-col">
+                <input
+                  type="email"
+                  name="Email_Address"
+                  value={values.Email_Address}
+                  onChange={handleInputChange}
+                  onBlur={() => setFieldTouched("Email_Address")}
+                  className={`${inputClass} ${touched.Email_Address && errors.Email_Address ? "border-red-500 text-red-600" : ""}`}
+                />
+                {touched.Email_Address && errors.Email_Address && (
+                  <div className="text-red-500 text-[10px] mt-1">
+                    {errors.Email_Address}
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="flex border border-gray-200 rounded-md overflow-hidden h-[42px]">
+
+            <div className={rowGroupClass}>
+              <label className={labelClass}>Contact Mobile</label>
               <input
-                type="number"
-                name="Packaging_Charges"
-                value={values.Packaging_Charges}
+                type="text"
+                name="Contact_Mobile"
+                value={values.Contact_Mobile}
                 onChange={handleInputChange}
-                className="flex-1 p-2 focus:outline-none px-4 text-sm sm:text-base"
+                className={inputClass}
               />
-              <select
-                name="PackagingType"
-                value={values.PackagingType}
-                onChange={handleInputChange}
-                className="border-l border-gray-200 bg-gray-50 p-2 focus:outline-none text-xs sm:text-sm"
-              >
-                <option value="Amount">Amount</option>
-                <option value="%">%</option>
-              </select>
             </div>
+          </div>
+        </div>
+
+        {/* Lab Equipment Section */}
+        <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.05)] p-8 mb-8">
+          <div className="flex items-center justify-center gap-2.5 text-[#2ecc71] text-2xl font-semibold mb-8">
+            <FaListUl /> List of Lab Equipment
+          </div>
+
+          <div className="flex flex-wrap justify-start sm:justify-end gap-3 sm:gap-6 mb-6">
+            {["hsn", "nabl", "make", "discount"].map((field) => (
+              <label
+                key={field}
+                className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 cursor-pointer bg-gray-50 px-2 py-1 rounded-md border border-gray-100 sm:bg-transparent sm:p-0 sm:border-0"
+              >
+                <input
+                  type="checkbox"
+                  checked={showFields[field]}
+                  onChange={(e) =>
+                    setShowFields((prev) => ({
+                      ...prev,
+                      [field]: e.target.checked,
+                    }))
+                  }
+                  className="w-3.5 h-3.5 sm:w-4 sm:h-4"
+                />
+                {field.toUpperCase()}
+              </label>
+            ))}
+          </div>
+
+          <div className="w-full overflow-x-auto rounded-lg border border-gray-200 mb-5">
+            <table className="w-full border-collapse table-fixed min-w-[1000px]">
+              <thead>
+                <tr className="bg-[#6c5ce7] text-white">
+                  <th className="w-[60px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
+                    Sr. No.
+                  </th>
+                  <th className="w-[250px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
+                    Item
+                  </th>
+                  {showFields.hsn && (
+                    <th className="w-[120px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
+                      HSN/SAC
+                    </th>
+                  )}
+                  {showFields.nabl && (
+                    <th className="w-[100px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
+                      NABL
+                    </th>
+                  )}
+                  {showFields.make && (
+                    <th className="w-[120px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
+                      Make
+                    </th>
+                  )}
+                  <th className="w-[250px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
+                    Specifications
+                  </th>
+                  <th className="w-[80px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
+                    Qty.
+                  </th>
+                  <th className="w-[120px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
+                    Unit Price
+                  </th>
+                  {showFields.discount && (
+                    <th className="w-[100px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
+                      Disc. %
+                    </th>
+                  )}
+                  <th className="w-[140px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
+                    Total Price
+                  </th>
+                  <th className="w-[200px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
+                    Image
+                  </th>
+                  <th className="w-[80px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
+                    Action
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {values.labEquipment.map((item, index) => (
+                  <tr key={item.id} className="hover:bg-gray-50">
+                    <td className="p-2 border border-gray-200 text-center">
+                      {index + 1}
+                    </td>
+                    <td className="p-2 border border-gray-200">
+                      <div className="flex flex-col">
+                        <Select
+                          options={itemOptions}
+                          value={itemOptions.find(
+                            (opt) => opt.value === item.item_name,
+                          )}
+                          onChange={(selected) =>
+                            handleEquipmentChange(
+                              index,
+                              "item_name",
+                              selected ? selected.value : "",
+                            )
+                          }
+                          onBlur={() =>
+                            setFieldTouched(`labEquipment[${index}].item_name`)
+                          }
+                          styles={customSelectStyles}
+                          placeholder="Select Item"
+                          isClearable
+                          menuPortalTarget={document.body}
+                          className={`${touched.labEquipment?.[index]?.item_name && errors.labEquipment?.[index]?.item_name ? "border-red-500 rounded" : ""}`}
+                        />
+                        {touched.labEquipment?.[index]?.item_name &&
+                          errors.labEquipment?.[index]?.item_name && (
+                            <div className="text-red-500 text-[9px] mt-0.5">
+                              {errors.labEquipment[index].item_name}
+                            </div>
+                          )}
+                      </div>
+                    </td>
+                    {showFields.hsn && (
+                      <td className="p-2 border border-gray-200">
+                        <input
+                          type="text"
+                          value={item.hsn}
+                          onChange={(e) =>
+                            handleEquipmentChange(index, "hsn", e.target.value)
+                          }
+                          className="w-full p-2 border border-gray-200 rounded text-sm"
+                        />
+                      </td>
+                    )}
+                    {showFields.nabl && (
+                      <td className="p-2 border border-gray-200">
+                        <input
+                          type="text"
+                          value={item.nabl}
+                          onChange={(e) =>
+                            handleEquipmentChange(index, "nabl", e.target.value)
+                          }
+                          className="w-full p-2 border border-gray-200 rounded text-sm"
+                        />
+                      </td>
+                    )}
+                    {showFields.make && (
+                      <td className="p-2 border border-gray-200">
+                        <input
+                          type="text"
+                          value={item.make}
+                          onChange={(e) =>
+                            handleEquipmentChange(index, "make", e.target.value)
+                          }
+                          className="w-full p-2 border border-gray-200 rounded text-sm"
+                        />
+                      </td>
+                    )}
+                    <td className="p-2 border border-gray-200">
+                      <input
+                        type="text"
+                        value={item.specifications}
+                        onChange={(e) =>
+                          handleEquipmentChange(
+                            index,
+                            "specifications",
+                            e.target.value,
+                          )
+                        }
+                        className="w-full p-2 border border-gray-200 rounded text-sm"
+                      />
+                    </td>
+                    <td className="p-2 border border-gray-200 text-center">
+                      <div className="flex flex-col">
+                        <input
+                          type="number"
+                          value={item.qty}
+                          min="1"
+                          onChange={(e) =>
+                            handleEquipmentChange(
+                              index,
+                              "qty",
+                              Number(e.target.value),
+                            )
+                          }
+                          onBlur={() =>
+                            setFieldTouched(`labEquipment[${index}].qty`)
+                          }
+                          className={`w-full p-2 border rounded text-sm text-center ${touched.labEquipment?.[index]?.qty && errors.labEquipment?.[index]?.qty ? "border-red-500" : "border-gray-200"}`}
+                        />
+                        {touched.labEquipment?.[index]?.qty &&
+                          errors.labEquipment?.[index]?.qty && (
+                            <div className="text-red-500 text-[9px] mt-0.5">
+                              {errors.labEquipment[index].qty}
+                            </div>
+                          )}
+                      </div>
+                    </td>
+                    <td className="p-2 border border-gray-200">
+                      <div className="flex flex-col">
+                        <input
+                          type="number"
+                          value={item.unit_price}
+                          onChange={(e) =>
+                            handleEquipmentChange(
+                              index,
+                              "unit_price",
+                              Number(e.target.value),
+                            )
+                          }
+                          onBlur={() =>
+                            setFieldTouched(`labEquipment[${index}].unit_price`)
+                          }
+                          className={`w-full p-2 border rounded text-sm text-right ${touched.labEquipment?.[index]?.unit_price && errors.labEquipment?.[index]?.unit_price ? "border-red-500" : "border-gray-200"}`}
+                        />
+                        {touched.labEquipment?.[index]?.unit_price &&
+                          errors.labEquipment?.[index]?.unit_price && (
+                            <div className="text-red-500 text-[9px] mt-0.5">
+                              {errors.labEquipment[index].unit_price}
+                            </div>
+                          )}
+                      </div>
+                    </td>
+                    {showFields.discount && (
+                      <td className="p-2 border border-gray-200">
+                        <input
+                          type="number"
+                          value={item.discount_percent}
+                          onChange={(e) =>
+                            handleEquipmentChange(
+                              index,
+                              "discount_percent",
+                              Number(e.target.value),
+                            )
+                          }
+                          className="w-full p-2 border border-gray-200 rounded text-sm text-center"
+                        />
+                      </td>
+                    )}
+                    <td className="p-2 border border-gray-200">
+                      <input
+                        type="number"
+                        value={item.total_price}
+                        readOnly
+                        className="w-full p-2 bg-gray-50 border border-gray-200 rounded text-sm text-right font-semibold"
+                      />
+                    </td>
+                    <td className="p-2 border border-gray-200">
+                      <input
+                        type="file"
+                        onChange={(e) =>
+                          handleEquipmentChange(
+                            index,
+                            "image",
+                            e.target.files[0],
+                          )
+                        }
+                        className="text-xs"
+                      />
+                    </td>
+                    <td className="p-2 border border-gray-200 text-center">
+                      <button
+                        type="button"
+                        onClick={() => removeEquipment(index)}
+                        className="bg-red-500 text-white p-2.5 rounded hover:bg-red-600 transition-colors"
+                      >
+                        <FaTrash />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                <tr className="bg-[#f1f8f5] font-bold">
+                  <td
+                    colSpan={
+                      2 +
+                      (showFields.hsn ? 1 : 0) +
+                      (showFields.nabl ? 1 : 0) +
+                      (showFields.make ? 1 : 0) +
+                      1
+                    }
+                    className="p-3 text-right pr-4"
+                  >
+                    <FaCalculator className="inline mr-2" /> Total
+                  </td>
+                  <td className="text-center">
+                    {values.labEquipment.reduce(
+                      (sum, item) => sum + item.qty,
+                      0,
+                    )}
+                  </td>
+                  <td className="text-center">-</td>
+                  {showFields.discount && <td className="text-center">-</td>}
+                  <td className="text-center text-[#2ecc71]">
+                    {calculateSubtotal()}
+                  </td>
+                  <td colSpan={2}></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <button
+            onClick={addMoreEquipment}
+            className={`${btnBaseClass} bg-[#2ecc71] text-white`}
+          >
+            <FaPlus /> Add More
+          </button>
+        </div>
+
+        {/* Additional Charges Card */}
+        <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.05)] p-8 mb-8">
+          <div className="flex items-center justify-center gap-2.5 text-[#2ecc71] text-2xl font-semibold mb-8">
+            <FaCalculator /> Additional Charges
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+            <div className="flex flex-col gap-3">
+              <div className="font-semibold text-gray-700 text-sm sm:text-base">
+                % Discount
+              </div>
+              <div className="flex border border-gray-200 rounded-md overflow-hidden h-[42px]">
+                <input
+                  type="number"
+                  name="Discount"
+                  value={values.Discount}
+                  onChange={handleInputChange}
+                  className="flex-1 p-2 focus:outline-none px-4 text-sm sm:text-base"
+                />
+                <select
+                  name="DiscountType"
+                  value={values.DiscountType}
+                  onChange={handleInputChange}
+                  className="border-l border-gray-200 bg-gray-50 p-2 focus:outline-none text-xs sm:text-sm"
+                >
+                  <option value="%">%</option>
+                  <option value="Amount">Amount</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center gap-2 font-semibold text-gray-700 text-sm sm:text-base">
+                <FaPaperPlane className="text-gray-500" /> Freight Charges
+              </div>
+              <div className="flex border border-gray-200 rounded-md overflow-hidden h-[42px]">
+                <input
+                  type="number"
+                  name="Freight_Charges"
+                  value={values.Freight_Charges}
+                  onChange={handleInputChange}
+                  className="flex-1 p-2 focus:outline-none px-4 text-sm sm:text-base"
+                />
+                <select
+                  name="FreightType"
+                  value={values.FreightType}
+                  onChange={handleInputChange}
+                  className="border-l border-gray-200 bg-gray-50 p-2 focus:outline-none text-xs sm:text-sm"
+                >
+                  <option value="Amount">Amount</option>
+                  <option value="%">%</option>
+                </select>
+              </div>
+              <input
+                type="text"
+                name="Freight_Note"
+                placeholder="Note (e.g. To Pay)"
+                value={values.Freight_Note}
+                onChange={handleInputChange}
+                className={inputClass}
+              />
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div className="font-semibold text-gray-700 text-sm sm:text-base">
+                Packaging Charges
+              </div>
+              <div className="flex border border-gray-200 rounded-md overflow-hidden h-[42px]">
+                <input
+                  type="number"
+                  name="Packaging_Charges"
+                  value={values.Packaging_Charges}
+                  onChange={handleInputChange}
+                  className="flex-1 p-2 focus:outline-none px-4 text-sm sm:text-base"
+                />
+                <select
+                  name="PackagingType"
+                  value={values.PackagingType}
+                  onChange={handleInputChange}
+                  className="border-l border-gray-200 bg-gray-50 p-2 focus:outline-none text-xs sm:text-sm"
+                >
+                  <option value="Amount">Amount</option>
+                  <option value="%">%</option>
+                </select>
+              </div>
+              <input
+                type="text"
+                name="Packaging_Note"
+                placeholder="Note"
+                value={values.Packaging_Note}
+                onChange={handleInputChange}
+                className={inputClass}
+              />
+            </div>
+          </div>
+
+          <div className="mt-8 sm:mt-10 text-right flex flex-col sm:flex-row items-end sm:items-center justify-end gap-3 sm:gap-5">
+            <span className="text-lg sm:text-2xl font-bold text-gray-700">
+              ₹ Total Amount
+            </span>
             <input
-              type="text"
-              name="Packaging_Note"
-              placeholder="Note"
-              value={values.Packaging_Note}
-              onChange={handleInputChange}
-              className={inputClass}
+              type="number"
+              value={calculateGrandTotal()}
+              readOnly
+              className="w-full sm:w-52 p-2.5 sm:p-3 bg-gray-50 border border-gray-200 rounded text-right text-[#2ecc71] font-bold text-xl sm:text-2xl"
             />
           </div>
         </div>
 
-        <div className="mt-8 sm:mt-10 text-right flex flex-col sm:flex-row items-end sm:items-center justify-end gap-3 sm:gap-5">
-          <span className="text-lg sm:text-2xl font-bold text-gray-700">
-            ₹ Total Amount
-          </span>
-          <input
-            type="number"
-            value={calculateGrandTotal()}
-            readOnly
-            className="w-full sm:w-52 p-2.5 sm:p-3 bg-gray-50 border border-gray-200 rounded text-right text-[#2ecc71] font-bold text-xl sm:text-2xl"
-          />
+        {/* T&C Card */}
+        <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.05)] p-8 mb-8">
+          <div className="flex items-center justify-center gap-2.5 text-[#2ecc71] text-2xl font-semibold mb-8">
+            <FaHandshake /> Terms & Conditions
+          </div>
+
+          <div className="flex flex-col gap-4 max-w-4xl mx-auto">
+            <div className="flex flex-col sm:grid sm:grid-cols-[100px_1fr] sm:items-center gap-2 sm:gap-4">
+              <label className="font-bold text-gray-600 text-sm sm:text-base">
+                Tax
+              </label>
+              <input
+                type="text"
+                name="Term_Tax"
+                value={values.Term_Tax}
+                onChange={handleInputChange}
+                className={inputClass}
+              />
+            </div>
+            <div className="flex flex-col sm:grid sm:grid-cols-[100px_1fr] sm:items-center gap-2 sm:gap-4">
+              <label className="font-bold text-gray-600 text-sm sm:text-base">
+                Payment
+              </label>
+              <input
+                type="text"
+                name="Term_Payment"
+                value={values.Term_Payment}
+                onChange={handleInputChange}
+                className={inputClass}
+              />
+            </div>
+            <div className="flex flex-col sm:grid sm:grid-cols-[100px_1fr] sm:items-center gap-2 sm:gap-4">
+              <label className="font-bold text-gray-600 text-sm sm:text-base">
+                Delivery
+              </label>
+              <input
+                type="text"
+                name="Term_Delivery"
+                value={values.Term_Delivery}
+                onChange={handleInputChange}
+                className={inputClass}
+              />
+            </div>
+            <div className="flex flex-col sm:grid sm:grid-cols-[100px_1fr] sm:items-start gap-2 sm:gap-4">
+              <label className="font-bold text-gray-600 sm:mt-3 text-sm sm:text-base">
+                Warranty
+              </label>
+              <textarea
+                name="Term_Warranty"
+                value={values.Term_Warranty}
+                onChange={handleInputChange}
+                className={`${inputClass} min-h-[100px]`}
+              ></textarea>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer Actions */}
+        <div className="flex flex-wrap justify-center gap-3 sm:gap-5 mt-10">
+          <button
+            onClick={() => handleSubmit("save")}
+            className={`${btnBaseClass} bg-[#5d69eb] text-white flex-1 sm:flex-none min-w-[100px] sm:min-w-[120px]`}
+          >
+            <FaSave /> Save
+          </button>
+          <button
+            onClick={() => handleSubmit("submit")}
+            className={`${btnBaseClass} bg-[#6359b6] text-white flex-1 sm:flex-none min-w-[100px] sm:min-w-[120px]`}
+          >
+            <FaPaperPlane /> Submit
+          </button>
+          <button
+            onClick={() => {
+              const totals = {
+                subtotal: calculateSubtotal(),
+                grandTotal: calculateGrandTotal(),
+              };
+              generateQuotationPDF(
+                values,
+                values.labEquipment,
+                showFields,
+                totals,
+              );
+            }}
+            className={`${btnBaseClass} bg-[#1fb977] text-white w-full sm:w-auto mt-2 sm:mt-0`}
+          >
+            <FaFilePdf /> Generate PDF
+          </button>
         </div>
       </div>
-
-      {/* T&C Card */}
-      <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.05)] p-8 mb-8">
-        <div className="flex items-center justify-center gap-2.5 text-[#2ecc71] text-2xl font-semibold mb-8">
-          <FaHandshake /> Terms & Conditions
-        </div>
-
-        <div className="flex flex-col gap-4 max-w-4xl mx-auto">
-          <div className="flex flex-col sm:grid sm:grid-cols-[100px_1fr] sm:items-center gap-2 sm:gap-4">
-            <label className="font-bold text-gray-600 text-sm sm:text-base">
-              Tax
-            </label>
-            <input
-              type="text"
-              name="Term_Tax"
-              value={values.Term_Tax}
-              onChange={handleInputChange}
-              className={inputClass}
-            />
-          </div>
-          <div className="flex flex-col sm:grid sm:grid-cols-[100px_1fr] sm:items-center gap-2 sm:gap-4">
-            <label className="font-bold text-gray-600 text-sm sm:text-base">
-              Payment
-            </label>
-            <input
-              type="text"
-              name="Term_Payment"
-              value={values.Term_Payment}
-              onChange={handleInputChange}
-              className={inputClass}
-            />
-          </div>
-          <div className="flex flex-col sm:grid sm:grid-cols-[100px_1fr] sm:items-center gap-2 sm:gap-4">
-            <label className="font-bold text-gray-600 text-sm sm:text-base">
-              Delivery
-            </label>
-            <input
-              type="text"
-              name="Term_Delivery"
-              value={values.Term_Delivery}
-              onChange={handleInputChange}
-              className={inputClass}
-            />
-          </div>
-          <div className="flex flex-col sm:grid sm:grid-cols-[100px_1fr] sm:items-start gap-2 sm:gap-4">
-            <label className="font-bold text-gray-600 sm:mt-3 text-sm sm:text-base">
-              Warranty
-            </label>
-            <textarea
-              name="Term_Warranty"
-              value={values.Term_Warranty}
-              onChange={handleInputChange}
-              className={`${inputClass} min-h-[100px]`}
-            ></textarea>
-          </div>
-        </div>
-      </div>
-
-      {/* Footer Actions */}
-      <div className="flex flex-wrap justify-center gap-3 sm:gap-5 mt-10">
-        <button
-          onClick={() => handleSubmit("save")}
-          className={`${btnBaseClass} bg-[#5d69eb] text-white flex-1 sm:flex-none min-w-[100px] sm:min-w-[120px]`}
-        >
-          <FaSave /> Save
-        </button>
-        <button
-          onClick={() => handleSubmit("submit")}
-          className={`${btnBaseClass} bg-[#6359b6] text-white flex-1 sm:flex-none min-w-[100px] sm:min-w-[120px]`}
-        >
-          <FaPaperPlane /> Submit
-        </button>
-        <button
-          onClick={() => {
-            const totals = {
-              subtotal: calculateSubtotal(),
-              grandTotal: calculateGrandTotal(),
-            };
-            generateQuotationPDF(values, values.labEquipment, showFields, totals);
-          }}
-          className={`${btnBaseClass} bg-[#1fb977] text-white w-full sm:w-auto mt-2 sm:mt-0`}
-        >
-          <FaFilePdf /> Generate PDF
-        </button>
-      </div>
-    </div>
-  </FormikProvider>
+    </FormikProvider>
   );
 };
 

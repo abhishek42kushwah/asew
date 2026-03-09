@@ -13,7 +13,7 @@ const upload = multer({ storage });
 router.post(
   "/",
   upload.fields([
-    { name: "Image_URL", maxCount: 1 },
+    { name: "Image_URL", maxCount: 200 },
     { name: "Generated_PDF", maxCount: 1 },
   ]),
   responseController.createResponse,

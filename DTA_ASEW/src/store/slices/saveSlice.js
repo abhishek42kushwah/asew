@@ -23,13 +23,15 @@ export const fetchSaves = createAsyncThunk(
 
 export const createSave = createAsyncThunk(
   "save/createSave",
-  async (saveData, { rejectWithValue }) => {
+  async (saveData, { rejectWithValue, dispatch }) => {
     try {
       const response = await axios.post(API_URL, saveData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
       });
+      // Re-fetch saves so the Redux store has the latest data (needed for search)
+      dispatch(fetchSaves());
       return response.data;
     } catch (error) {
       return rejectWithValue(
