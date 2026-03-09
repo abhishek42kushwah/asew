@@ -500,12 +500,13 @@ const QuotationForm = () => {
   };
 
   const inputClass =
-    "p-2.5 px-4 border border-gray-200 rounded-md text-base bg-white transition-colors focus:outline-none focus:border-[#2ecc71] w-full";
+    "p-2.5 px-4 border border-gray-200 rounded-md text-sm sm:text-base bg-white transition-colors focus:outline-none focus:border-[#2ecc71] w-full";
   const labelClass =
-    "flex items-center gap-2.5 font-semibold text-gray-700 whitespace-nowrap";
-  const rowGroupClass = "grid grid-cols-[140px_1fr] items-center gap-4";
+    "flex items-center gap-2.5 font-semibold text-gray-700 whitespace-nowrap text-sm sm:text-base";
+  const rowGroupClass =
+    "flex flex-col sm:grid sm:grid-cols-[140px_1fr] sm:items-center gap-2 sm:gap-4";
   const btnBaseClass =
-    "px-5 py-2.5 rounded-md font-semibold cursor-pointer flex items-center gap-2 transition-all text-sm hover:opacity-90 hover:-translate-y-0.5 shadow-sm";
+    "px-4 sm:px-5 py-2 sm:py-2.5 rounded-md font-semibold cursor-pointer flex items-center justify-center gap-2 transition-all text-xs sm:text-sm hover:opacity-90 hover:-translate-y-0.5 shadow-sm";
 
   return (
     <div className="max-w-[1200px] mx-auto my-5 px-5 font-sans text-gray-800 relative">
@@ -590,18 +591,18 @@ const QuotationForm = () => {
 
       {/* Quotation Details Card */}
       <div className="bg-white rounded-xl shadow-[0_8px_30px_rgba(0,0,0,0.05)] p-8 mb-8">
-        <div className="flex items-center justify-center gap-4 mb-10 pb-5 border-b border-gray-100">
-          <FaFileAlt size={35} className="text-gray-700" />
-          <h1 className="text-4xl tracking-tight text-gray-800 uppercase font-bold">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 mb-8 sm:mb-10 pb-5 border-b border-gray-100 text-center sm:text-left">
+          <FaFileAlt size={30} className="text-gray-700 sm:size-[35px]" />
+          <h1 className="text-2xl sm:text-3xl md:text-4xl tracking-tight text-gray-800 uppercase font-bold">
             ASEW QUOTATION FORM
           </h1>
         </div>
 
-        <div className="flex items-center justify-center gap-2.5 text-[#2ecc71] text-2xl font-semibold mb-8">
+        <div className="flex items-center justify-center gap-2.5 text-[#2ecc71] text-xl sm:text-2xl font-semibold mb-6 sm:mb-8">
           <FaInfoCircle /> Quotation Details
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-5 sm:gap-y-6">
           <div className={`${rowGroupClass} md:col-span-2`}>
             <label className={labelClass}>
               <FaCalendarAlt className="text-gray-500" /> Date
@@ -619,7 +620,7 @@ const QuotationForm = () => {
             <label className={labelClass}>
               <FaHashtag className="text-gray-500" /> Quotation No.
             </label>
-            <div className="flex gap-2 items-center">
+            <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
               <input
                 type="text"
                 name="Quotation_No"
@@ -628,33 +629,35 @@ const QuotationForm = () => {
                 placeholder="Enter or Generate"
                 className={inputClass}
               />
-              <button
-                type="button"
-                onClick={() => {
-                  setCopyQuotationNo("");
-                  setShowCopyModal(true);
-                }}
-                className={`${btnBaseClass} bg-[#f39c12] text-white px-4 whitespace-nowrap h-[42px]`}
-              >
-                <FaCopy /> Copy Old
-              </button>
-              {formData.Quotation_No.trim() && (
+              <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={handleSearchQuotation}
-                  className={`${btnBaseClass} border border-[#3498db] text-[#3498db] bg-transparent px-4 whitespace-nowrap h-[42px]`}
+                  onClick={() => {
+                    setCopyQuotationNo("");
+                    setShowCopyModal(true);
+                  }}
+                  className={`${btnBaseClass} bg-[#f39c12] text-white flex-1 sm:px-4 whitespace-nowrap h-[38px] sm:h-[42px]`}
                 >
-                  <FaSearch /> Search Old Quotation
+                  <FaCopy /> Copy Old
                 </button>
-              )}
+                {formData.Quotation_No.trim() && (
+                  <button
+                    type="button"
+                    onClick={handleSearchQuotation}
+                    className={`${btnBaseClass} border border-[#3498db] text-[#3498db] bg-transparent flex-1 sm:px-4 whitespace-nowrap h-[38px] sm:h-[42px]`}
+                  >
+                    <FaSearch /> Search Old Quotation
+                  </button>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-[140px_1fr] items-center gap-4 md:col-span-2">
+          <div className="flex flex-col sm:grid sm:grid-cols-[140px_1fr] sm:items-center gap-2 sm:gap-4 md:col-span-2">
             <label className={labelClass}>
-              <FaUser className="text-gray-500" /> Customer Name
+              <FaUser className="text-gray-500" /> Customer
             </label>
-            <div className="flex gap-2 flex-1 items-center">
+            <div className="flex flex-col sm:flex-row gap-2 flex-1 sm:items-center">
               <div className="flex-1">
                 <Select
                   options={customerOptions}
@@ -670,7 +673,7 @@ const QuotationForm = () => {
                     })
                   }
                   styles={customSelectStyles}
-                  placeholder="Search or Select Customer"
+                  placeholder="Select Customer"
                   isClearable
                   menuPortalTarget={document.body}
                 />
@@ -678,9 +681,9 @@ const QuotationForm = () => {
               <button
                 type="button"
                 onClick={() => setIsCustomerModalOpen(true)}
-                className={`${btnBaseClass} border border-[#3498db] text-[#3498db] bg-transparent px-3 py-1.5 whitespace-nowrap h-[38px]`}
+                className={`${btnBaseClass} border border-[#3498db] text-[#3498db] bg-transparent whitespace-nowrap h-[38px] w-full sm:w-auto`}
               >
-                <FaPlus /> Add Customer
+                <FaPlus /> Add New
               </button>
             </div>
           </div>
@@ -759,11 +762,11 @@ const QuotationForm = () => {
           <FaListUl /> List of Lab Equipment
         </div>
 
-        <div className="flex justify-end gap-6 mb-6">
+        <div className="flex flex-wrap justify-start sm:justify-end gap-3 sm:gap-6 mb-6">
           {["hsn", "nabl", "make", "discount"].map((field) => (
             <label
               key={field}
-              className="flex items-center gap-2.5 text-sm text-gray-600 cursor-pointer"
+              className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 cursor-pointer bg-gray-50 px-2 py-1 rounded-md border border-gray-100 sm:bg-transparent sm:p-0 sm:border-0"
             >
               <input
                 type="checkbox"
@@ -774,9 +777,9 @@ const QuotationForm = () => {
                     [field]: e.target.checked,
                   }))
                 }
-                className="w-4 h-4"
+                className="w-3.5 h-3.5 sm:w-4 sm:h-4"
               />
-              Show {field.toUpperCase()}
+              {field.toUpperCase()}
             </label>
           ))}
         </div>
@@ -1023,22 +1026,24 @@ const QuotationForm = () => {
           <FaCalculator /> Additional Charges
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
           <div className="flex flex-col gap-3">
-            <div className="font-semibold text-gray-700">% Discount</div>
-            <div className="flex border border-gray-200 rounded-md overflow-hidden">
+            <div className="font-semibold text-gray-700 text-sm sm:text-base">
+              % Discount
+            </div>
+            <div className="flex border border-gray-200 rounded-md overflow-hidden h-[42px]">
               <input
                 type="number"
                 name="Discount"
                 value={formData.Discount}
                 onChange={handleInputChange}
-                className="flex-1 p-2 focus:outline-none px-4"
+                className="flex-1 p-2 focus:outline-none px-4 text-sm sm:text-base"
               />
               <select
                 name="DiscountType"
                 value={formData.DiscountType}
                 onChange={handleInputChange}
-                className="border-l border-gray-200 bg-gray-50 p-2 focus:outline-none"
+                className="border-l border-gray-200 bg-gray-50 p-2 focus:outline-none text-xs sm:text-sm"
               >
                 <option value="%">%</option>
                 <option value="Amount">Amount</option>
@@ -1047,22 +1052,22 @@ const QuotationForm = () => {
           </div>
 
           <div className="flex flex-col gap-3">
-            <div className="flex items-center gap-2 font-semibold text-gray-700">
+            <div className="flex items-center gap-2 font-semibold text-gray-700 text-sm sm:text-base">
               <FaPaperPlane className="text-gray-500" /> Freight Charges
             </div>
-            <div className="flex border border-gray-200 rounded-md overflow-hidden">
+            <div className="flex border border-gray-200 rounded-md overflow-hidden h-[42px]">
               <input
                 type="number"
                 name="Freight_Charges"
                 value={formData.Freight_Charges}
                 onChange={handleInputChange}
-                className="flex-1 p-2 focus:outline-none px-4"
+                className="flex-1 p-2 focus:outline-none px-4 text-sm sm:text-base"
               />
               <select
                 name="FreightType"
                 value={formData.FreightType}
                 onChange={handleInputChange}
-                className="border-l border-gray-200 bg-gray-50 p-2 focus:outline-none"
+                className="border-l border-gray-200 bg-gray-50 p-2 focus:outline-none text-xs sm:text-sm"
               >
                 <option value="Amount">Amount</option>
                 <option value="%">%</option>
@@ -1079,20 +1084,22 @@ const QuotationForm = () => {
           </div>
 
           <div className="flex flex-col gap-3">
-            <div className="font-semibold text-gray-700">Packaging Charges</div>
-            <div className="flex border border-gray-200 rounded-md overflow-hidden">
+            <div className="font-semibold text-gray-700 text-sm sm:text-base">
+              Packaging Charges
+            </div>
+            <div className="flex border border-gray-200 rounded-md overflow-hidden h-[42px]">
               <input
                 type="number"
                 name="Packaging_Charges"
                 value={formData.Packaging_Charges}
                 onChange={handleInputChange}
-                className="flex-1 p-2 focus:outline-none px-4"
+                className="flex-1 p-2 focus:outline-none px-4 text-sm sm:text-base"
               />
               <select
                 name="PackagingType"
                 value={formData.PackagingType}
                 onChange={handleInputChange}
-                className="border-l border-gray-200 bg-gray-50 p-2 focus:outline-none"
+                className="border-l border-gray-200 bg-gray-50 p-2 focus:outline-none text-xs sm:text-sm"
               >
                 <option value="Amount">Amount</option>
                 <option value="%">%</option>
@@ -1109,13 +1116,15 @@ const QuotationForm = () => {
           </div>
         </div>
 
-        <div className="mt-10 text-right text-2xl font-bold flex items-center justify-end gap-5">
-          <span>₹ Total Amount</span>
+        <div className="mt-8 sm:mt-10 text-right flex flex-col sm:flex-row items-end sm:items-center justify-end gap-3 sm:gap-5">
+          <span className="text-lg sm:text-2xl font-bold text-gray-700">
+            ₹ Total Amount
+          </span>
           <input
             type="number"
             value={calculateGrandTotal()}
             readOnly
-            className="w-52 p-3 bg-gray-50 border border-gray-200 rounded text-right text-[#2ecc71]"
+            className="w-full sm:w-52 p-2.5 sm:p-3 bg-gray-50 border border-gray-200 rounded text-right text-[#2ecc71] font-bold text-xl sm:text-2xl"
           />
         </div>
       </div>
@@ -1127,8 +1136,10 @@ const QuotationForm = () => {
         </div>
 
         <div className="flex flex-col gap-4 max-w-4xl mx-auto">
-          <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-            <label className="font-bold text-gray-600">Tax</label>
+          <div className="flex flex-col sm:grid sm:grid-cols-[100px_1fr] sm:items-center gap-2 sm:gap-4">
+            <label className="font-bold text-gray-600 text-sm sm:text-base">
+              Tax
+            </label>
             <input
               type="text"
               name="Term_Tax"
@@ -1137,8 +1148,10 @@ const QuotationForm = () => {
               className={inputClass}
             />
           </div>
-          <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-            <label className="font-bold text-gray-600">Payment</label>
+          <div className="flex flex-col sm:grid sm:grid-cols-[100px_1fr] sm:items-center gap-2 sm:gap-4">
+            <label className="font-bold text-gray-600 text-sm sm:text-base">
+              Payment
+            </label>
             <input
               type="text"
               name="Term_Payment"
@@ -1147,8 +1160,10 @@ const QuotationForm = () => {
               className={inputClass}
             />
           </div>
-          <div className="grid grid-cols-[100px_1fr] items-center gap-4">
-            <label className="font-bold text-gray-600">Delivery</label>
+          <div className="flex flex-col sm:grid sm:grid-cols-[100px_1fr] sm:items-center gap-2 sm:gap-4">
+            <label className="font-bold text-gray-600 text-sm sm:text-base">
+              Delivery
+            </label>
             <input
               type="text"
               name="Term_Delivery"
@@ -1157,8 +1172,10 @@ const QuotationForm = () => {
               className={inputClass}
             />
           </div>
-          <div className="grid grid-cols-[100px_1fr] items-start gap-4">
-            <label className="font-bold text-gray-600 mt-3">Warranty</label>
+          <div className="flex flex-col sm:grid sm:grid-cols-[100px_1fr] sm:items-start gap-2 sm:gap-4">
+            <label className="font-bold text-gray-600 sm:mt-3 text-sm sm:text-base">
+              Warranty
+            </label>
             <textarea
               name="Term_Warranty"
               value={formData.Term_Warranty}
@@ -1170,16 +1187,16 @@ const QuotationForm = () => {
       </div>
 
       {/* Footer Actions */}
-      <div className="flex justify-center gap-5 mt-10">
+      <div className="flex flex-wrap justify-center gap-3 sm:gap-5 mt-10">
         <button
           onClick={() => handleSubmit("save")}
-          className={`${btnBaseClass} bg-[#5d69eb] text-white scale-110`}
+          className={`${btnBaseClass} bg-[#5d69eb] text-white flex-1 sm:flex-none min-w-[100px] sm:min-w-[120px]`}
         >
           <FaSave /> Save
         </button>
         <button
           onClick={() => handleSubmit("submit")}
-          className={`${btnBaseClass} bg-[#6359b6] text-white scale-110`}
+          className={`${btnBaseClass} bg-[#6359b6] text-white flex-1 sm:flex-none min-w-[100px] sm:min-w-[120px]`}
         >
           <FaPaperPlane /> Submit
         </button>
@@ -1191,7 +1208,7 @@ const QuotationForm = () => {
             };
             generateQuotationPDF(formData, labEquipment, showFields, totals);
           }}
-          className={`${btnBaseClass} bg-[#1fb977] text-white scale-110`}
+          className={`${btnBaseClass} bg-[#1fb977] text-white w-full sm:w-auto mt-2 sm:mt-0`}
         >
           <FaFilePdf /> Generate PDF
         </button>

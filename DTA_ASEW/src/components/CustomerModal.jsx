@@ -91,10 +91,10 @@ const CustomerModal = ({ isOpen, onClose, onSuccess }) => {
         {/* Body */}
         <form
           onSubmit={formik.handleSubmit}
-          className="p-4 sm:p-6 md:p-8 space-y-4 overflow-y-auto"
+          className="p-4 sm:p-6 md:p-8 space-y-4 sm:space-y-5 overflow-y-auto"
         >
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-            <div>
+            <div className="flex flex-col gap-1">
               <label className="text-sm font-semibold text-gray-600">
                 Customer Name *
               </label>
@@ -106,7 +106,7 @@ const CustomerModal = ({ isOpen, onClose, onSuccess }) => {
               {errorMsg("Customer_Name")}
             </div>
 
-            <div>
+            <div className="flex flex-col gap-1">
               <label className="text-sm font-semibold text-gray-600">
                 GSTIN/UIN
               </label>
@@ -118,7 +118,7 @@ const CustomerModal = ({ isOpen, onClose, onSuccess }) => {
               {errorMsg("GSTIN_UIN")}
             </div>
 
-            <div>
+            <div className="flex flex-col gap-1">
               <label className="text-sm font-semibold text-gray-600">
                 PAN No.
               </label>
@@ -130,7 +130,7 @@ const CustomerModal = ({ isOpen, onClose, onSuccess }) => {
               {errorMsg("PAN_No")}
             </div>
 
-            <div>
+            <div className="flex flex-col gap-1">
               <label className="text-sm font-semibold text-gray-600">
                 Contact Person
               </label>
@@ -142,7 +142,7 @@ const CustomerModal = ({ isOpen, onClose, onSuccess }) => {
               {errorMsg("Contact_Person")}
             </div>
 
-            <div>
+            <div className="flex flex-col gap-1">
               <label className="text-sm font-semibold text-gray-600">
                 Email Address
               </label>
@@ -154,7 +154,7 @@ const CustomerModal = ({ isOpen, onClose, onSuccess }) => {
               {errorMsg("Email_Address")}
             </div>
 
-            <div>
+            <div className="flex flex-col gap-1">
               <label className="text-sm font-semibold text-gray-600">
                 Contact Mobile
               </label>
@@ -166,13 +166,13 @@ const CustomerModal = ({ isOpen, onClose, onSuccess }) => {
               {errorMsg("Contact_Mobile")}
             </div>
 
-            <div className="sm:col-span-2">
+            <div className="sm:col-span-2 flex flex-col gap-1">
               <label className="text-sm font-semibold text-gray-600">
                 Buyer Address
               </label>
               <textarea
                 {...formik.getFieldProps("Buyer_Address")}
-                className={`${inputClass("Buyer_Address")} min-h-[80px]`}
+                className={`${inputClass("Buyer_Address")} min-h-[80px] sm:min-h-[100px]`}
               />
               {errorMsg("Buyer_Address")}
             </div>
