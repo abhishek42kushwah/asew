@@ -7,7 +7,6 @@ const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
  * Normalize helper
  */
 const normalize = (s) =>
-  
   s?.toString().trim().replace(/\s+/g, " ").toLowerCase();
 
 /**
@@ -32,6 +31,31 @@ const insertByHeader = async (sheetName, dataObject) => {
 };
 
 /**
+ * ✅ INSERT MULTIPLE BY HEADER NAME
+ */
+const insertMultipleByHeader = async (sheetName, dataObjects) => {
+  if (!dataObjects || dataObjects.length === 0) return;
+
+  const headerRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!1:1`,
+  });
+
+  const rawHeaders = headerRes.data.values[0];
+
+  const rows = dataObjects.map((dataObject) => {
+    return rawHeaders.map((header) => dataObject[header] ?? "");
+  });
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!A:ZZ`,
+    valueInputOption: "USER_ENTERED",
+    requestBody: { values: rows },
+  });
+};
+
+/**
  * GET ALL ROWS
  */
 const getAll = async (sheetName) => {
@@ -46,7 +70,7 @@ const getAll = async (sheetName) => {
     headers.reduce((obj, key, i) => {
       obj[key] = row[i] ?? null;
       return obj;
-    }, {})
+    }, {}),
   );
 };
 
@@ -75,21 +99,55 @@ const clearSheet = async (sheetName) => {
 /**
  * ✅ UPDATE BY ID (Column A)
  */
-const updateById = async (sheetName, id, updatedData) => {
+const updateById = async (sheetName, id, updatedData, idColumn = null) => {
+  console.log(
+    `[db] updateById: sheet=${sheetName}, id=${id}, idCol=${idColumn || "Column A"}`,
+  );
+
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A:Z`,
+    range: `${sheetName}!A:ZZ`,
   });
 
   const rows = res.data.values;
   if (!rows || rows.length === 0) throw new Error("Sheet empty");
 
   const rawHeaders = rows[0];
+  let searchColIndex = 0;
 
-  // ✅ Find row index where first column = id
-  const rowIndex = rows.findIndex((r, i) => i !== 0 && String(r[0]).trim() === String(id).trim());
+  // If idColumn specified, find its index in headers (robust match)
+  const norm = (s) =>
+    s
+      ?.toString()
+      .toLowerCase()
+      .replace(/[\s_-]/g, "") || "";
 
-  if (rowIndex === -1) throw new Error("Row not found");
+  if (idColumn) {
+    const normalizedIdCol = norm(idColumn);
+    searchColIndex = rawHeaders.findIndex((h) => norm(h) === normalizedIdCol);
+    if (searchColIndex === -1) {
+      console.warn(
+        `[db] idColumn "${idColumn}" not found in headers, falling back to Column A`,
+      );
+      searchColIndex = 0;
+    }
+  }
+
+  // ✅ Find row index where searchColIndex column = id
+  const targetId = String(id).trim();
+  const rowIndex = rows.findIndex(
+    (r, i) =>
+      i !== 0 &&
+      r[searchColIndex] &&
+      String(r[searchColIndex]).trim() === targetId,
+  );
+
+  if (rowIndex === -1) {
+    console.error(
+      `[db] Row not found for id: "${id}" in column index ${searchColIndex}`,
+    );
+    throw new Error(`Row with ID "${id}" not found in sheet "${sheetName}".`);
+  }
 
   // ✅ Build updated row correctly
   const updatedRow = rawHeaders.map((header, colIndex) => {
@@ -97,6 +155,8 @@ const updateById = async (sheetName, id, updatedData) => {
       ? updatedData[header]
       : rows[rowIndex][colIndex] || "";
   });
+
+  console.log(`[db] Updating row ${rowIndex + 1} with data:`, updatedData);
 
   // ✅ Update Google Sheet row
   await sheets.spreadsheets.values.update({
@@ -111,12 +171,12 @@ const updateById = async (sheetName, id, updatedData) => {
   return true;
 };
 
-
 module.exports = {
   insertByHeader,
   getAll,
   find,
   updateById,
   findById,
-  clearSheet
+  clearSheet,
+  insertMultipleByHeader,
 };

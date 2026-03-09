@@ -36,6 +36,24 @@ export const createItem = createAsyncThunk(
   },
 );
 
+export const updateItemMaster = createAsyncThunk(
+  "item/updateItemMaster",
+  async ({  itemData }, { rejectWithValue }) => {
+    try {
+      const response = await axios.put(API_URL, itemData, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to update item master",
+      );
+    }
+  },
+);
+
 const itemSlice = createSlice({
   name: "item",
   initialState: {
@@ -67,6 +85,27 @@ const itemSlice = createSlice({
         state.items.push(action.payload);
       })
       .addCase(createItem.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      })
+      .addCase(updateItemMaster.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(updateItemMaster.fulfilled, (state, action) => {
+        state.isLoading = false;
+        // Optionally update the item in the list if needed
+        const index = state.items.findIndex(
+          (item) => item.ITEM_NAME === action.meta.arg.name,
+        );
+        if (index !== -1) {
+          state.items[index] = {
+            ...state.items[index],
+            ...action.meta.arg.itemData,
+          };
+        }
+      })
+      .addCase(updateItemMaster.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
       });

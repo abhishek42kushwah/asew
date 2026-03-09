@@ -68,3 +68,37 @@ exports.getCustomers = async (req, res) => {
     });
   }
 };
+/**
+ * UPDATE CUSTOMER
+ */
+exports.updateCustomer = async (req, res) => {
+  try {
+    const updateData = req.body;
+    const name = updateData.Customer_Name;
+
+    if (!name) {
+      return res
+        .status(400)
+        .json({ message: "Customer_Name is required for update" });
+    }
+
+    await db.updateById(
+      SHEET_NAME,
+      name,
+      {
+        ...updateData,
+        Updated_at: new Date().toISOString(),
+      },
+      "Customer_Name",
+    );
+
+    res.json({
+      message: "Customer updated successfully",
+    });
+  } catch (err) {
+    console.error(`[CustomerMaster] Update failed: ${err.message}`);
+    res.status(500).json({
+      message: err.message || "Error updating customer",
+    });
+  }
+};

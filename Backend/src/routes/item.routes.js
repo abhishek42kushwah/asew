@@ -6,6 +6,6 @@ const itemController = require("../controllers/itemMaster.controller");
 router.post("/", itemController.createItem);
 
 router.get("/", itemController.getItems);
-
+router.put("/", itemController.updateItem);
 
 module.exports = router;

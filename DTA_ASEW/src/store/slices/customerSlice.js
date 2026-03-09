@@ -36,6 +36,20 @@ export const createCustomer = createAsyncThunk(
   },
 );
 
+export const updateCustomerMaster = createAsyncThunk(
+  "customer/updateCustomer",
+  async ({  customerData }, { rejectWithValue }) => {
+    try {
+      const response = await axios.put(API_URL, customerData);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to update customer",
+      );
+    }
+  },
+);
+
 const customerSlice = createSlice({
   name: "customer",
   initialState: {
@@ -67,6 +81,18 @@ const customerSlice = createSlice({
         state.customers.push(action.payload);
       })
       .addCase(createCustomer.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      })
+      .addCase(updateCustomerMaster.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(updateCustomerMaster.fulfilled, (state) => {
+        state.isLoading = false;
+        // Optionally update the local state if needed
+      })
+      .addCase(updateCustomerMaster.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
       });

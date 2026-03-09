@@ -18,14 +18,35 @@ import {
   FaSearch,
   FaSpinner,
 } from "react-icons/fa";
-import { fetchCustomers } from "../store/slices/customerSlice";
-import { fetchItems } from "../store/slices/itemSlice";
+import {
+  fetchCustomers,
+  updateCustomerMaster,
+} from "../store/slices/customerSlice";
+import { fetchItems, updateItemMaster } from "../store/slices/itemSlice";
 import { fetchSaves, createSave } from "../store/slices/saveSlice";
 import { fetchResponses, createResponse } from "../store/slices/responseSlice";
 import CustomerModal from "./CustomerModal";
 import Select from "react-select";
 import toast from "react-hot-toast";
+import { useFormik, FieldArray, FormikProvider } from "formik";
+import * as Yup from "yup";
 import { generateQuotationPDF, generatePDFBlob } from "../utils/pdfGenerator";
+
+const validationSchema = Yup.object().shape({
+  Date: Yup.string().required("Date is required"),
+  Quotation_No: Yup.string().required("Quotation No is required"),
+  Customer_Name: Yup.string().required("Customer Name is required"),
+  Email_Address: Yup.string().email("Invalid email"),
+  labEquipment: Yup.array()
+    .of(
+      Yup.object().shape({
+        item_name: Yup.string().required("Required"),
+        qty: Yup.number().required("Required").min(1, "Min 1"),
+        unit_price: Yup.number().required("Required").min(0, "Min 0"),
+      }),
+    )
+    .min(1, "At least one item required"),
+});
 
 const QuotationForm = () => {
   const dispatch = useDispatch();
@@ -34,66 +55,55 @@ const QuotationForm = () => {
   const { saves } = useSelector((state) => state.save);
   const { responses } = useSelector((state) => state.response);
 
-  const handleSearchQuotation = () => {
-    const searchNo = formData.Quotation_No.trim();
-    if (!searchNo) {
-      toast.error("Please enter a quotation number to search");
-      return;
-    }
+  const formik = useFormik({
+    initialValues: {
+      Date: new Date().toISOString().split("T")[0],
+      Quotation_No: "",
+      Customer_Name: "",
+      Buyer_Address: "",
+      Delivery_Address: "",
+      GSTIN_UIN: "",
+      PAN_No: "",
+      Contact_Person: "",
+      Email_Address: "",
+      Contact_Mobile: "",
+      Discount: 0,
+      DiscountType: "%",
+      Freight_Charges: 0,
+      FreightType: "Amount",
+      Freight_Note: "",
+      Packaging_Charges: 0,
+      PackagingType: "Amount",
+      Packaging_Note: "",
+      Term_Tax: "Extra, GST @ 18%",
+      Term_Payment: "30% advance & balance at the time of dispatch",
+      Term_Delivery: "1-2 weeks after receipt of your Purchase Order.",
+      Term_Warranty:
+        "12 months standard warranty against any manufacturing defects or poor workmanship. Warranty shall not be applicable on consumables, rubber, glass and plastic parts, normal wear & tear and mishandling of the equipment.",
+      labEquipment: [
+        {
+          id: 1,
+          item_name: "",
+          specifications: "",
+          qty: 1,
+          unit_price: 0,
+          total_price: 0,
+          image: null,
+          hsn: "",
+          nabl: "",
+          make: "",
+          discount_percent: 0,
+        },
+      ],
+    },
+    validationSchema,
+    onSubmit: (values) => {
+      // Logic handled by handleSubmit
+    },
+  });
 
-    // Search only in saves
-    const allRecords = [...saves];
-    const found = allRecords.find((r) => {
-      const recordNo = r.header?.Quotation_No || r.Quotation_No;
-      return recordNo === searchNo;
-    });
-
-    if (found) {
-      // Extract data
-      const header = found.header || found;
-      const items = found.items || (found.ITEMS ? JSON.parse(found.ITEMS) : []);
-
-      setFormData((prev) => ({
-        ...prev,
-        Customer_Name: header.Customer_Name || "",
-        Buyer_Address: header.Buyer_Address || "",
-        Delivery_Address: header.Delivery_Address || "",
-        GSTIN_UIN: header.GSTIN_UIN || "",
-        Contact_Person: header.Contact_Person || "",
-        Email_Address: header.Email_Address || "",
-        Contact_Mobile: header.Contact_Mobile || "",
-        Discount: header.Discount || 0,
-        DiscountType: header.DiscountType || "%",
-        Freight_Charges: header.Freight_Charges || 0,
-        FreightType: header.FreightType || "Amount",
-        Freight_Note: header.Freight_Note || "",
-        Packaging_Charges: header.Packaging_Charges || 0,
-        PackagingType: header.PackagingType || "Amount",
-        Packaging_Note: header.Packaging_Note || "",
-        Term_Tax: header.Term_Tax || prev.Term_Tax,
-        Term_Payment: header.Term_Payment || prev.Term_Payment,
-        Term_Delivery: header.Term_Delivery || prev.Term_Delivery,
-        Term_Warranty: header.Term_Warranty || prev.Term_Warranty,
-      }));
-
-      // Map items to include unique IDs
-      setLabEquipment(
-        items.map((item, idx) => ({
-          ...item,
-          id: Date.now() + idx,
-          item_name: item.item_name || item.ITEM_NAME || "",
-          qty: Number(item.qty || item.QTY || 1),
-          unit_price: Number(item.unit_price || 0),
-          total_price: Number(item.total_price || 0),
-          nabl: item.nabl || "No",
-        })),
-      );
-
-      toast.success("Quotation found and loaded!");
-    } else {
-      toast.error("Quotation not found");
-    }
-  };
+  const { values, setFieldValue, setValues, errors, touched, setFieldTouched } =
+    formik;
 
   const customerOptions = customers.map((c) => ({
     value: c.Customer_Name || c.CUSTOMER_NAME,
@@ -134,46 +144,62 @@ const QuotationForm = () => {
     }),
   };
 
-  const [formData, setFormData] = useState({
-    Date: new Date().toISOString().split("T")[0],
-    Quotation_No: "",
-    Customer_Name: "",
-    Buyer_Address: "",
-    Delivery_Address: "",
-    GSTIN_UIN: "",
-    Contact_Person: "",
-    Email_Address: "",
-    Contact_Mobile: "",
-    Discount: 0,
-    DiscountType: "%",
-    Freight_Charges: 0,
-    FreightType: "Amount",
-    Freight_Note: "",
-    Packaging_Charges: 0,
-    PackagingType: "Amount",
-    Packaging_Note: "",
-    Term_Tax: "Extra, GST @ 18%",
-    Term_Payment: "30% advance & balance at the time of dispatch",
-    Term_Delivery: "1-2 weeks after receipt of your Purchase Order.",
-    Term_Warranty:
-      "12 months standard warranty against any manufacturing defects or poor workmanship. Warranty shall not be applicable on consumables, rubber, glass and plastic parts, normal wear & tear and mishandling of the equipment.",
-  });
+  const handleSearchQuotation = () => {
+    const searchNo = values.Quotation_No.trim();
+    if (!searchNo) {
+      toast.error("Please enter a quotation number to search");
+      return;
+    }
 
-  const [labEquipment, setLabEquipment] = useState([
-    {
-      id: 1,
-      item_name: "",
-      specifications: "",
-      qty: 1,
-      unit_price: 0,
-      total_price: 0,
-      image: null,
-      hsn: "",
-      nabl: "",
-      make: "",
-      discount_percent: 0,
-    },
-  ]);
+    // Search only in saves
+    const allRecords = [...saves];
+    const found = allRecords.find((r) => {
+      const recordNo = r.header?.Quotation_No || r.Quotation_No;
+      return recordNo === searchNo;
+    });
+
+    if (found) {
+      // Extract data
+      const header = found.header || found;
+      const items = found.items || (found.ITEMS ? JSON.parse(found.ITEMS) : []);
+
+      setValues((prev) => ({
+        ...prev,
+        Customer_Name: header.Customer_Name || "",
+        Buyer_Address: header.Buyer_Address || "",
+        Delivery_Address: header.Delivery_Address || "",
+        GSTIN_UIN: header.GSTIN_UIN || "",
+        Contact_Person: header.Contact_Person || "",
+        Email_Address: header.Email_Address || "",
+        Contact_Mobile: header.Contact_Mobile || "",
+        Discount: header.Discount || 0,
+        DiscountType: header.DiscountType || "%",
+        Freight_Charges: header.Freight_Charges || 0,
+        FreightType: header.FreightType || "Amount",
+        Freight_Note: header.Freight_Note || "",
+        Packaging_Charges: header.Packaging_Charges || 0,
+        PackagingType: header.PackagingType || "Amount",
+        Packaging_Note: header.Packaging_Note || "",
+        Term_Tax: header.Term_Tax || prev.Term_Tax,
+        Term_Payment: header.Term_Payment || prev.Term_Payment,
+        Term_Delivery: header.Term_Delivery || prev.Term_Delivery,
+        Term_Warranty: header.Term_Warranty || prev.Term_Warranty,
+        labEquipment: items.map((item, idx) => ({
+          ...item,
+          id: Date.now() + idx,
+          item_name: item.item_name || item.ITEM_NAME || "",
+          qty: Number(item.qty || item.QTY || 1),
+          unit_price: Number(item.unit_price || 0),
+          total_price: Number(item.total_price || 0),
+          nabl: item.nabl || "No",
+        })),
+      }));
+
+      toast.success("Quotation found and loaded!");
+    } else {
+      toast.error("Quotation not found");
+    }
+  };
 
   const [showFields, setShowFields] = useState({
     hsn: false,
@@ -190,7 +216,7 @@ const QuotationForm = () => {
   }, [dispatch]);
 
   useEffect(() => {
-    if ((saves.length > 0 || responses.length > 0) && !formData.Quotation_No) {
+    if ((saves.length > 0 || responses.length > 0) && !values.Quotation_No) {
       const allNos = [
         ...saves.map((s) => s.header?.Quotation_No || s.Quotation_No),
         ...responses.map((r) => r.header?.Quotation_No || r.Quotation_No),
@@ -214,35 +240,34 @@ const QuotationForm = () => {
         nextSeq,
       ).padStart(4, "0")}`;
 
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setFormData((prev) => ({ ...prev, Quotation_No: quotationNo }));
+      setFieldValue("Quotation_No", quotationNo);
     }
-  }, [saves, responses, formData.Quotation_No]);
+  }, [saves, responses, values.Quotation_No, setFieldValue]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => {
-      const updated = { ...prev, [name]: value };
+    setFieldValue(name, value);
 
-      if (name === "Customer_Name") {
-        const selectedCustomer = customers.find(
-          (c) => (c.Customer_Name || c.CUSTOMER_NAME) === value,
-        );
-        if (selectedCustomer) {
-          updated.Buyer_Address = selectedCustomer.Buyer_Address || "";
-          updated.GSTIN_UIN = selectedCustomer.GSTIN_UIN || "";
-          updated.Contact_Person = selectedCustomer.Contact_Person || "";
-          updated.Email_Address = selectedCustomer.Email_Address || "";
-          updated.Contact_Mobile = selectedCustomer.Contact_Mobile || "";
-        }
+    if (name === "Customer_Name") {
+      const selectedCustomer = customers.find(
+        (c) => (c.Customer_Name || c.CUSTOMER_NAME) === value,
+      );
+      if (selectedCustomer) {
+        setValues((prev) => ({
+          ...prev,
+          Customer_Name: value,
+          Buyer_Address: selectedCustomer.Buyer_Address || "",
+          GSTIN_UIN: selectedCustomer.GSTIN_UIN || "",
+          Contact_Person: selectedCustomer.Contact_Person || "",
+          Email_Address: selectedCustomer.Email_Address || "",
+          Contact_Mobile: selectedCustomer.Contact_Mobile || "",
+        }));
       }
-
-      return updated;
-    });
+    }
   };
 
   const handleEquipmentChange = (index, field, value) => {
-    const updated = [...labEquipment];
+    const updated = [...values.labEquipment];
     updated[index][field] = value;
 
     if (field === "item_name") {
@@ -268,14 +293,13 @@ const QuotationForm = () => {
       const disc = updated[index].discount_percent || 0;
       updated[index].total_price = qty * price * (1 - disc / 100);
     }
-    setLabEquipment(updated);
+    setFieldValue("labEquipment", updated);
   };
 
   const addMoreEquipment = () => {
-    setLabEquipment([
-      ...labEquipment,
+    setFieldValue("labEquipment", [
+      ...values.labEquipment,
       {
-        // eslint-disable-next-line react-hooks/purity
         id: Date.now(),
         item_name: "",
         specifications: "",
@@ -292,13 +316,16 @@ const QuotationForm = () => {
   };
 
   const removeEquipment = (index) => {
-    if (labEquipment.length > 1) {
-      setLabEquipment(labEquipment.filter((_, i) => i !== index));
+    if (values.labEquipment.length > 1) {
+      setFieldValue(
+        "labEquipment",
+        values.labEquipment.filter((_, i) => i !== index),
+      );
     }
   };
 
   const calculateSubtotal = () => {
-    return labEquipment.reduce((sum, item) => sum + item.total_price, 0);
+    return values.labEquipment.reduce((sum, item) => sum + item.total_price, 0);
   };
 
   const calculateGrandTotal = () => {
@@ -306,17 +333,17 @@ const QuotationForm = () => {
     let total = subtotal;
 
     // Discount
-    if (formData.DiscountType === "%") {
-      total -= subtotal * (formData.Discount / 100);
+    if (values.DiscountType === "%") {
+      total -= subtotal * (values.Discount / 100);
     } else {
-      total -= formData.Discount;
+      total -= values.Discount;
     }
 
     // Freight
-    total += Number(formData.Freight_Charges);
+    total += Number(values.Freight_Charges);
 
     // Packaging
-    total += Number(formData.Packaging_Charges);
+    total += Number(values.Packaging_Charges);
 
     return total;
   };
@@ -363,7 +390,7 @@ const QuotationForm = () => {
               : header.ITEMS;
         }
 
-        setFormData((prev) => ({
+        setValues((prev) => ({
           ...prev,
           Customer_Name: header.Customer_Name || "",
           Buyer_Address: header.Buyer_Address || "",
@@ -384,10 +411,7 @@ const QuotationForm = () => {
           Term_Payment: header.Term_Payment || prev.Term_Payment,
           Term_Delivery: header.Term_Delivery || prev.Term_Delivery,
           Term_Warranty: header.Term_Warranty || prev.Term_Warranty,
-        }));
-
-        setLabEquipment(
-          items.map((item, idx) => ({
+          labEquipment: items.map((item, idx) => ({
             id: Date.now() + idx,
             item_name: item.item_name || item.Item_Name || item.ITEM_NAME || "",
             specifications: item.specifications || item.SPECIFICATIONS || "",
@@ -405,7 +429,7 @@ const QuotationForm = () => {
             ),
             image: null,
           })),
-        );
+        }));
 
         toast.success(`Quotation "${searchNo}" copied successfully!`);
         setShowCopyModal(false);
@@ -418,17 +442,17 @@ const QuotationForm = () => {
 
   const handleSubmit = async (actionType) => {
     // Basic validations
-    if (!formData.Date) {
+    if (!values.Date) {
       toast.error("Date is required.");
       return;
     }
 
-    if (!formData.Customer_Name?.trim()) {
+    if (!values.Customer_Name?.trim()) {
       toast.error("Please select a Customer before submitting.");
       return;
     }
 
-    const validItems = labEquipment.filter(
+    const validItems = values.labEquipment.filter(
       (item) => item.item_name && item.item_name.trim() !== "",
     );
 
@@ -438,7 +462,12 @@ const QuotationForm = () => {
     }
 
     const data = new FormData();
-    Object.keys(formData).forEach((key) => data.append(key, formData[key]));
+    Object.keys(values).forEach((key) => {
+      if (key !== "labEquipment") {
+        data.append(key, values[key]);
+      }
+    });
+
     data.append("ITEMS", JSON.stringify(validItems));
     data.append("Subtotal", calculateSubtotal());
     data.append("Total_Amount", calculateGrandTotal());
@@ -458,7 +487,7 @@ const QuotationForm = () => {
         grandTotal: calculateGrandTotal(),
       };
       const pdfBlob = await generatePDFBlob(
-        formData,
+        values,
         validItems,
         showFields,
         totals,
@@ -467,8 +496,53 @@ const QuotationForm = () => {
       data.append(
         "Generated_PDF",
         pdfBlob,
-        `Quotation_${formData.Quotation_No || "New"}.pdf`,
+        `Quotation_${values.Quotation_No || "New"}.pdf`,
       );
+      // Automatically sync items to Item Master
+      validItems.forEach((item) => {
+        const itemData = {
+          ITEM_NAME: item.item_name,
+          SPECIFICATIONS: item.specifications,
+          UNIT_PRICE: item.unit_price,
+          HSN_CODE: item.hsn,
+          MAKE: item.make,
+          NABL: item.nabl,
+        };
+        dispatch(updateItemMaster({ name: item.item_name, itemData }))
+          .unwrap()
+          .then(() =>
+            console.log(`[AutoSync] "${item.item_name}" updated in Master`),
+          )
+          .catch((err) =>
+            console.error(`[AutoSync] Failed for "${item.item_name}":`, err),
+          );
+      });
+      // Automatically sync customer details to Customer Master
+      if (values.Customer_Name) {
+        const customerData = {
+          Customer_Name: values.Customer_Name,
+          Buyer_Address: values.Buyer_Address,
+          GSTIN_UIN: values.GSTIN_UIN,
+          PAN_No: values.PAN_No,
+          Contact_Person: values.Contact_Person,
+          Email_Address: values.Email_Address,
+          Contact_Mobile: values.Contact_Mobile,
+        };
+        dispatch(
+          updateCustomerMaster({
+            customerData,
+          }),
+        )
+          .unwrap()
+          .then(() =>
+            console.log(
+              `[AutoSync] Customer "${values.Customer_Name}" updated`,
+            ),
+          )
+          .catch((err) =>
+            console.error(`[AutoSync] Customer update failed:`, err),
+          );
+      }
     } catch (err) {
       console.error("PDF generation failed:", err);
       toast.error("Failed to generate PDF. Proceeding without it.", {
@@ -509,15 +583,16 @@ const QuotationForm = () => {
     "px-4 sm:px-5 py-2 sm:py-2.5 rounded-md font-semibold cursor-pointer flex items-center justify-center gap-2 transition-all text-xs sm:text-sm hover:opacity-90 hover:-translate-y-0.5 shadow-sm";
 
   return (
-    <div className="max-w-[1200px] mx-auto my-5 px-5 font-sans text-gray-800 relative">
-      <CustomerModal
-        isOpen={isCustomerModalOpen}
-        onClose={() => setIsCustomerModalOpen(false)}
-        onSuccess={(name) => {
-          setFormData((prev) => ({ ...prev, Customer_Name: name }));
-          setIsCustomerModalOpen(false);
-        }}
-      />
+    <FormikProvider value={formik}>
+      <div className="max-w-[1200px] mx-auto my-5 px-5 font-sans text-gray-800 relative">
+        <CustomerModal
+          isOpen={isCustomerModalOpen}
+          onClose={() => setIsCustomerModalOpen(false)}
+          onSuccess={(name) => {
+            setValues((prev) => ({ ...prev, Customer_Name: name }));
+            setIsCustomerModalOpen(false);
+          }}
+        />
 
       {/* Copy Old Quotation Modal */}
       {showCopyModal && (
@@ -610,10 +685,14 @@ const QuotationForm = () => {
             <input
               type="date"
               name="Date"
-              value={formData.Date}
+              value={values.Date}
               onChange={handleInputChange}
-              className={inputClass}
+              onBlur={() => setFieldTouched("Date")}
+              className={`${inputClass} ${touched.Date && errors.Date ? "border-red-500 text-red-600" : ""}`}
             />
+            {touched.Date && errors.Date && (
+              <div className="text-red-500 text-[10px] mt-1">{errors.Date}</div>
+            )}
           </div>
 
           <div className={`${rowGroupClass} md:col-span-2`}>
@@ -621,14 +700,22 @@ const QuotationForm = () => {
               <FaHashtag className="text-gray-500" /> Quotation No.
             </label>
             <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-              <input
-                type="text"
-                name="Quotation_No"
-                value={formData.Quotation_No}
-                onChange={handleInputChange}
-                placeholder="Enter or Generate"
-                className={inputClass}
-              />
+              <div className="flex-1 flex flex-col">
+                <input
+                  type="text"
+                  name="Quotation_No"
+                  value={values.Quotation_No}
+                  onChange={handleInputChange}
+                  onBlur={() => setFieldTouched("Quotation_No")}
+                  placeholder="Enter or Generate"
+                  className={`${inputClass} ${touched.Quotation_No && errors.Quotation_No ? "border-red-500 text-red-600" : ""}`}
+                />
+                {touched.Quotation_No && errors.Quotation_No && (
+                  <div className="text-red-500 text-[10px] mt-1">
+                    {errors.Quotation_No}
+                  </div>
+                )}
+              </div>
               <div className="flex gap-2">
                 <button
                   type="button"
@@ -640,7 +727,7 @@ const QuotationForm = () => {
                 >
                   <FaCopy /> Copy Old
                 </button>
-                {formData.Quotation_No.trim() && (
+                {values.Quotation_No.trim() && (
                   <button
                     type="button"
                     onClick={handleSearchQuotation}
@@ -658,11 +745,11 @@ const QuotationForm = () => {
               <FaUser className="text-gray-500" /> Customer
             </label>
             <div className="flex flex-col sm:flex-row gap-2 flex-1 sm:items-center">
-              <div className="flex-1">
+              <div className="flex-1 flex flex-col">
                 <Select
                   options={customerOptions}
                   value={customerOptions.find(
-                    (opt) => opt.value === formData.Customer_Name,
+                    (opt) => opt.value === values.Customer_Name,
                   )}
                   onChange={(selected) =>
                     handleInputChange({
@@ -672,11 +759,17 @@ const QuotationForm = () => {
                       },
                     })
                   }
+                  onBlur={() => setFieldTouched("Customer_Name")}
                   styles={customSelectStyles}
                   placeholder="Select Customer"
                   isClearable
                   menuPortalTarget={document.body}
                 />
+                {touched.Customer_Name && errors.Customer_Name && (
+                  <div className="text-red-500 text-[10px] mt-1">
+                    {errors.Customer_Name}
+                  </div>
+                )}
               </div>
               <button
                 type="button"
@@ -692,7 +785,7 @@ const QuotationForm = () => {
             <label className={labelClass}>Buyer Address</label>
             <textarea
               name="Buyer_Address"
-              value={formData.Buyer_Address}
+              value={values.Buyer_Address}
               onChange={handleInputChange}
               placeholder="Full address of buyer"
               className={`${inputClass} min-h-[80px]`}
@@ -703,7 +796,7 @@ const QuotationForm = () => {
             <label className={labelClass}>Delivery Address</label>
             <textarea
               name="Delivery_Address"
-              value={formData.Delivery_Address}
+              value={values.Delivery_Address}
               onChange={handleInputChange}
               placeholder="Full delivery address"
               className={`${inputClass} min-h-[80px]`}
@@ -715,7 +808,7 @@ const QuotationForm = () => {
             <input
               type="text"
               name="GSTIN_UIN"
-              value={formData.GSTIN_UIN}
+              value={values.GSTIN_UIN}
               onChange={handleInputChange}
               className={inputClass}
             />
@@ -726,7 +819,7 @@ const QuotationForm = () => {
             <input
               type="text"
               name="Contact_Person"
-              value={formData.Contact_Person}
+              value={values.Contact_Person}
               onChange={handleInputChange}
               className={inputClass}
             />
@@ -734,13 +827,21 @@ const QuotationForm = () => {
 
           <div className={rowGroupClass}>
             <label className={labelClass}>Email Address</label>
-            <input
-              type="email"
-              name="Email_Address"
-              value={formData.Email_Address}
-              onChange={handleInputChange}
-              className={inputClass}
-            />
+            <div className="flex flex-col">
+              <input
+                type="email"
+                name="Email_Address"
+                value={values.Email_Address}
+                onChange={handleInputChange}
+                onBlur={() => setFieldTouched("Email_Address")}
+                className={`${inputClass} ${touched.Email_Address && errors.Email_Address ? "border-red-500 text-red-600" : ""}`}
+              />
+              {touched.Email_Address && errors.Email_Address && (
+                <div className="text-red-500 text-[10px] mt-1">
+                  {errors.Email_Address}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className={rowGroupClass}>
@@ -748,7 +849,7 @@ const QuotationForm = () => {
             <input
               type="text"
               name="Contact_Mobile"
-              value={formData.Contact_Mobile}
+              value={values.Contact_Mobile}
               onChange={handleInputChange}
               className={inputClass}
             />
@@ -835,29 +936,38 @@ const QuotationForm = () => {
               </tr>
             </thead>
             <tbody>
-              {labEquipment.map((item, index) => (
+              {values.labEquipment.map((item, index) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="p-2 border border-gray-200 text-center">
                     {index + 1}
                   </td>
                   <td className="p-2 border border-gray-200">
-                    <Select
-                      options={itemOptions}
-                      value={itemOptions.find(
-                        (opt) => opt.value === item.item_name,
+                    <div className="flex flex-col">
+                      <Select
+                        options={itemOptions}
+                        value={itemOptions.find(
+                          (opt) => opt.value === item.item_name,
+                        )}
+                        onChange={(selected) =>
+                          handleEquipmentChange(
+                            index,
+                            "item_name",
+                            selected ? selected.value : "",
+                          )
+                        }
+                        onBlur={() => setFieldTouched(`labEquipment[${index}].item_name`)}
+                        styles={customSelectStyles}
+                        placeholder="Select Item"
+                        isClearable
+                        menuPortalTarget={document.body}
+                        className={`${touched.labEquipment?.[index]?.item_name && errors.labEquipment?.[index]?.item_name ? "border-red-500 rounded" : ""}`}
+                      />
+                      {touched.labEquipment?.[index]?.item_name && errors.labEquipment?.[index]?.item_name && (
+                        <div className="text-red-500 text-[9px] mt-0.5">
+                          {errors.labEquipment[index].item_name}
+                        </div>
                       )}
-                      onChange={(selected) =>
-                        handleEquipmentChange(
-                          index,
-                          "item_name",
-                          selected ? selected.value : "",
-                        )
-                      }
-                      styles={customSelectStyles}
-                      placeholder="Select Item"
-                      isClearable
-                      menuPortalTarget={document.body}
-                    />
+                    </div>
                   </td>
                   {showFields.hsn && (
                     <td className="p-2 border border-gray-200">
@@ -910,33 +1020,49 @@ const QuotationForm = () => {
                     />
                   </td>
                   <td className="p-2 border border-gray-200 text-center">
-                    <input
-                      type="number"
-                      value={item.qty}
-                      min="1"
-                      onChange={(e) =>
-                        handleEquipmentChange(
-                          index,
-                          "qty",
-                          Number(e.target.value),
-                        )
-                      }
-                      className="w-full p-2 border border-gray-200 rounded text-sm text-center"
-                    />
+                    <div className="flex flex-col">
+                      <input
+                        type="number"
+                        value={item.qty}
+                        min="1"
+                        onChange={(e) =>
+                          handleEquipmentChange(
+                            index,
+                            "qty",
+                            Number(e.target.value),
+                          )
+                        }
+                        onBlur={() => setFieldTouched(`labEquipment[${index}].qty`)}
+                        className={`w-full p-2 border rounded text-sm text-center ${touched.labEquipment?.[index]?.qty && errors.labEquipment?.[index]?.qty ? "border-red-500" : "border-gray-200"}`}
+                      />
+                      {touched.labEquipment?.[index]?.qty && errors.labEquipment?.[index]?.qty && (
+                        <div className="text-red-500 text-[9px] mt-0.5">
+                          {errors.labEquipment[index].qty}
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="p-2 border border-gray-200">
-                    <input
-                      type="number"
-                      value={item.unit_price}
-                      onChange={(e) =>
-                        handleEquipmentChange(
-                          index,
-                          "unit_price",
-                          Number(e.target.value),
-                        )
-                      }
-                      className="w-full p-2 border border-gray-200 rounded text-sm text-right"
-                    />
+                    <div className="flex flex-col">
+                      <input
+                        type="number"
+                        value={item.unit_price}
+                        onChange={(e) =>
+                          handleEquipmentChange(
+                            index,
+                            "unit_price",
+                            Number(e.target.value),
+                          )
+                        }
+                        onBlur={() => setFieldTouched(`labEquipment[${index}].unit_price`)}
+                        className={`w-full p-2 border rounded text-sm text-right ${touched.labEquipment?.[index]?.unit_price && errors.labEquipment?.[index]?.unit_price ? "border-red-500" : "border-gray-200"}`}
+                      />
+                      {touched.labEquipment?.[index]?.unit_price && errors.labEquipment?.[index]?.unit_price && (
+                        <div className="text-red-500 text-[9px] mt-0.5">
+                          {errors.labEquipment[index].unit_price}
+                        </div>
+                      )}
+                    </div>
                   </td>
                   {showFields.discount && (
                     <td className="p-2 border border-gray-200">
@@ -973,6 +1099,7 @@ const QuotationForm = () => {
                   </td>
                   <td className="p-2 border border-gray-200 text-center">
                     <button
+                      type="button"
                       onClick={() => removeEquipment(index)}
                       className="bg-red-500 text-white p-2.5 rounded hover:bg-red-600 transition-colors"
                     >
@@ -995,7 +1122,7 @@ const QuotationForm = () => {
                   <FaCalculator className="inline mr-2" /> Total
                 </td>
                 <td className="text-center">
-                  {labEquipment.reduce((sum, item) => sum + item.qty, 0)}
+                  {values.labEquipment.reduce((sum, item) => sum + item.qty, 0)}
                 </td>
                 <td className="text-center">-</td>
                 {showFields.discount && <td className="text-center">-</td>}
@@ -1031,13 +1158,13 @@ const QuotationForm = () => {
               <input
                 type="number"
                 name="Discount"
-                value={formData.Discount}
+                value={values.Discount}
                 onChange={handleInputChange}
                 className="flex-1 p-2 focus:outline-none px-4 text-sm sm:text-base"
               />
               <select
                 name="DiscountType"
-                value={formData.DiscountType}
+                value={values.DiscountType}
                 onChange={handleInputChange}
                 className="border-l border-gray-200 bg-gray-50 p-2 focus:outline-none text-xs sm:text-sm"
               >
@@ -1055,13 +1182,13 @@ const QuotationForm = () => {
               <input
                 type="number"
                 name="Freight_Charges"
-                value={formData.Freight_Charges}
+                value={values.Freight_Charges}
                 onChange={handleInputChange}
                 className="flex-1 p-2 focus:outline-none px-4 text-sm sm:text-base"
               />
               <select
                 name="FreightType"
-                value={formData.FreightType}
+                value={values.FreightType}
                 onChange={handleInputChange}
                 className="border-l border-gray-200 bg-gray-50 p-2 focus:outline-none text-xs sm:text-sm"
               >
@@ -1073,7 +1200,7 @@ const QuotationForm = () => {
               type="text"
               name="Freight_Note"
               placeholder="Note (e.g. To Pay)"
-              value={formData.Freight_Note}
+              value={values.Freight_Note}
               onChange={handleInputChange}
               className={inputClass}
             />
@@ -1087,13 +1214,13 @@ const QuotationForm = () => {
               <input
                 type="number"
                 name="Packaging_Charges"
-                value={formData.Packaging_Charges}
+                value={values.Packaging_Charges}
                 onChange={handleInputChange}
                 className="flex-1 p-2 focus:outline-none px-4 text-sm sm:text-base"
               />
               <select
                 name="PackagingType"
-                value={formData.PackagingType}
+                value={values.PackagingType}
                 onChange={handleInputChange}
                 className="border-l border-gray-200 bg-gray-50 p-2 focus:outline-none text-xs sm:text-sm"
               >
@@ -1105,7 +1232,7 @@ const QuotationForm = () => {
               type="text"
               name="Packaging_Note"
               placeholder="Note"
-              value={formData.Packaging_Note}
+              value={values.Packaging_Note}
               onChange={handleInputChange}
               className={inputClass}
             />
@@ -1139,7 +1266,7 @@ const QuotationForm = () => {
             <input
               type="text"
               name="Term_Tax"
-              value={formData.Term_Tax}
+              value={values.Term_Tax}
               onChange={handleInputChange}
               className={inputClass}
             />
@@ -1151,7 +1278,7 @@ const QuotationForm = () => {
             <input
               type="text"
               name="Term_Payment"
-              value={formData.Term_Payment}
+              value={values.Term_Payment}
               onChange={handleInputChange}
               className={inputClass}
             />
@@ -1163,7 +1290,7 @@ const QuotationForm = () => {
             <input
               type="text"
               name="Term_Delivery"
-              value={formData.Term_Delivery}
+              value={values.Term_Delivery}
               onChange={handleInputChange}
               className={inputClass}
             />
@@ -1174,7 +1301,7 @@ const QuotationForm = () => {
             </label>
             <textarea
               name="Term_Warranty"
-              value={formData.Term_Warranty}
+              value={values.Term_Warranty}
               onChange={handleInputChange}
               className={`${inputClass} min-h-[100px]`}
             ></textarea>
@@ -1202,7 +1329,7 @@ const QuotationForm = () => {
               subtotal: calculateSubtotal(),
               grandTotal: calculateGrandTotal(),
             };
-            generateQuotationPDF(formData, labEquipment, showFields, totals);
+            generateQuotationPDF(values, values.labEquipment, showFields, totals);
           }}
           className={`${btnBaseClass} bg-[#1fb977] text-white w-full sm:w-auto mt-2 sm:mt-0`}
         >
@@ -1210,6 +1337,7 @@ const QuotationForm = () => {
         </button>
       </div>
     </div>
+  </FormikProvider>
   );
 };
 
