@@ -169,7 +169,7 @@ const QuotationForm = () => {
       total_price: 0,
       image: null,
       hsn: "",
-      nabl: "No",
+      nabl: "",
       make: "",
       discount_percent: 0,
     },
@@ -253,7 +253,7 @@ const QuotationForm = () => {
         updated[index].unit_price = parseFloat(priceStr.replace(/,/g, "")) || 0;
         updated[index].hsn = selectedItem.HSN_CODE || "";
         updated[index].make = selectedItem.MAKE || "";
-        updated[index].nabl = selectedItem.NABL ? "Yes" : "No";
+        updated[index].nabl = selectedItem.NABL ? "Yes" : "";
       }
     }
 
@@ -284,7 +284,7 @@ const QuotationForm = () => {
         total_price: 0,
         image: null,
         hsn: "",
-        nabl: "No",
+        nabl: "",
         make: "",
         discount_percent: 0,
       },
@@ -396,7 +396,7 @@ const QuotationForm = () => {
             total_price: Number(item.total_price || item.Total_Price || 0),
             hsn: item.hsn || item.HSN_Code || item.HSN_CODE || "",
             make: item.make || item.Make || item.MAKE || "",
-            nabl: item.nabl || item.NABL || "No",
+            nabl: item.nabl || item.NABL || "",
             discount_percent: Number(
               item.discount_percent ||
                 item.Item_Discount ||
@@ -646,7 +646,7 @@ const QuotationForm = () => {
                     onClick={handleSearchQuotation}
                     className={`${btnBaseClass} border border-[#3498db] text-[#3498db] bg-transparent flex-1 sm:px-4 whitespace-nowrap h-[38px] sm:h-[42px]`}
                   >
-                    <FaSearch /> Search Old Quotation
+                    <FaSearch /> Search Old
                   </button>
                 )}
               </div>
@@ -872,18 +872,14 @@ const QuotationForm = () => {
                     </td>
                   )}
                   {showFields.nabl && (
-                    <td className="p-2 border border-gray-200 text-center">
+                    <td className="p-2 border border-gray-200">
                       <input
-                        type="checkbox"
-                        checked={item.nabl === "Yes"}
+                        type="text"
+                        value={item.nabl}
                         onChange={(e) =>
-                          handleEquipmentChange(
-                            index,
-                            "nabl",
-                            e.target.checked ? "Yes" : "No",
-                          )
+                          handleEquipmentChange(index, "nabl", e.target.value)
                         }
-                        className="w-4 h-4 mt-1"
+                        className="w-full p-2 border border-gray-200 rounded text-sm"
                       />
                     </td>
                   )}

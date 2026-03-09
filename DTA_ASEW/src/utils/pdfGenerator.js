@@ -46,7 +46,9 @@ export const generateQuotationPDF = (
     });
   };
 
-  const hasImages = labEquipment.some((item) => item.image);
+  const hasImages = labEquipment.some(
+    (item) => item.image && item.image !== "",
+  );
 
   let tableHeaders = `<th>Sr. No.</th><th>Item</th><th>Specifications</th>`;
   if (showFields.make) tableHeaders += `<th>Make</th>`;
@@ -67,8 +69,6 @@ export const generateQuotationPDF = (
     .map((item, index) => {
       let imageHtml = "";
       if (hasImages && item.image) {
-        // Create an object URL for the File object (if it exists)
-        // If it was fetched from the backend, it might be a string URL instead
         let src = "";
         if (item.image instanceof File || item.image instanceof Blob) {
           src = URL.createObjectURL(item.image);
@@ -77,11 +77,13 @@ export const generateQuotationPDF = (
         }
 
         if (src) {
-          imageHtml = `<img src="${src}" width="50" height="50" style="object-fit: cover;">`;
+          imageHtml = `<img src="${src}" width="90" height="90" style="object-fit: contain; border: 1px solid #eee; border-radius: 6px;">`;
         }
       }
 
-      const imageCellHtml = hasImages ? `<td>${imageHtml}</td>` : "";
+      const imageCellHtml = hasImages
+        ? `<td style="text-align:center; padding: 4px;">${imageHtml}</td>`
+        : "";
       const makeCell = showFields.make
         ? `<td>${escapeHtml(item.make)}</td>`
         : "";
@@ -94,10 +96,10 @@ export const generateQuotationPDF = (
         : "";
 
       return `
-        <tr>
+        <tr style="page-break-inside: avoid;">
           <td style="text-align:center;">${index + 1}</td>
-          <td>${escapeHtml(item.item_name)}</td>
-          <td>${escapeHtml(item.specifications)}</td>
+          <td style="font-weight: bold; width: 180px;">${escapeHtml(item.item_name)}</td>
+          <td style="font-size: 9pt; white-space: pre-wrap;">${escapeHtml(item.specifications)}</td>
           ${makeCell}
           ${hsnCell}
           ${nablCell}
@@ -180,43 +182,50 @@ export const generateQuotationPDF = (
     <head>
       <title>Quotation ${escapeHtml(formData.Quotation_No)}</title>
       <style>
-        @media print { body { -webkit-print-color-adjust: exact !important; } }
-        body { font-family: Arial, Times, serif; font-size: 10pt; color: #333; margin: 20px; }
+        @media print { 
+          body { -webkit-print-color-adjust: exact !important; margin: 0; } 
+          .container { width: 100%; margin: 0; padding: 10mm; }
+        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 10pt; color: #333; margin: 20px; line-height: 1.4; }
         .container { width: 95%; margin: auto; }
-        .header { display: flex; align-items: center; border-bottom: 2px solid #000; padding: 15px; margin-bottom: 20px; background-color: #ADD8E6; }
-        .logo { width: 80px; margin-right: 20px; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; font-weight: bold; background: white; color: #000; height: 80px; text-align: center; font-size: 1.5rem; }
-        .company-info { flex-grow: 1; text-align: center; }
-        .company-info h3 { margin: 0; font-size: 12pt; font-weight: bold; text-transform: uppercase; color: #FF0000; white-space: nowrap; }
-        .company-info p { margin: 2px 0; font-size: 12pt; color: #000; }
-        .details { display: flex; justify-content: space-between; margin-bottom: 20px; }
-        .details-left, .details-right { width: 45%; }
-        .details-left p, .details-right p { margin: 5px 0; font-size: 10pt; }
-        .customer { margin-bottom: 20px; }
-        .customer p { margin: 5px 0; font-size: 10pt; }
-        .quotation-title { text-align: center; font-size: 14pt; font-weight: bold; margin-bottom: 10px; }
-        .intro { margin-bottom: 20px; font-size: 10pt; }
-        .equipment-title { font-size: 12pt; font-weight: bold; margin-bottom: 15px; }
-        table.equipment-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-        .equipment-table th, .equipment-table td { border: 1px solid #ccc; padding: 8px; text-align: left; font-size: 10pt; vertical-align: middle; }
-        .equipment-table th { background-color: #ADD8E6; font-weight: bold; color: #000; }
-        .equipment-table tbody tr:last-child { font-weight: bold; background-color: #f9f9f9; }
-        .terms { margin-bottom: 20px; }
-        .terms h3 { font-size: 12pt; font-weight: bold; margin-bottom: 10px; }
-        table.terms-table { width: 100%; border-collapse: collapse; font-size: 10pt; }
-        .terms-table th, .terms-table td { border: 1px solid #ccc; padding: 8px; vertical-align: top; text-align: left; }
-        .terms-table th { width: 30%; background-color: #f2f2f2; font-weight: bold; border-right: 2px solid #000; }
-        .terms-table td { width: 70%; }
-        .closing { margin-bottom: 20px; font-size: 10pt; }
-        .footer { text-align: center; border-top: 2px solid #000; padding-top: 10px; margin-top: 30px; font-size: 9pt; display: flex; justify-content: center; gap: 20px; }
-        .footer span { display: flex; align-items: center; gap: 5px; }
-        .underline-text { border-bottom: 1px solid #000; display: inline-block; padding-bottom: 2px;}
+        .header { display: flex; align-items: center; border-bottom: 3px solid #334155; padding: 20px; margin-bottom: 25px; background-color: #f8fafc; border-radius: 8px 8px 0 0; }
+        .logo-container { width: 160px; height: 100px; display: flex; align-items: center; justify-content: center; background: white; border-radius: 6px; padding: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-right: 25px; }
+        .logo { max-width: 100%; max-height: 100%; object-fit: contain; }
+        .company-info { flex-grow: 1; text-align: left; }
+        .company-info h3 { margin: 0 0 5px 0; font-size: 16pt; font-weight: 800; text-transform: uppercase; color: #dc2626; letter-spacing: 0.5px; }
+        .company-info p { margin: 2px 0; font-size: 11pt; color: #475569; font-weight: 500; }
+        .details { display: flex; justify-content: space-between; margin-bottom: 25px; padding: 15px; background-color: #f1f5f9; border-radius: 8px; }
+        .details-left, .details-right { width: 48%; }
+        .details-left p, .details-right p { margin: 4px 0; font-size: 10pt; }
+        .customer { margin-bottom: 25px; padding: 0 15px; }
+        .customer p { margin: 4px 0; font-size: 10pt; color: #1e293b; }
+        .quotation-title { text-align: center; font-size: 16pt; font-weight: 800; margin-bottom: 20px; color: #1e293b; text-transform: uppercase; }
+        .intro { margin-bottom: 20px; font-size: 10pt; padding: 0 15px; }
+        .equipment-title { font-size: 12pt; font-weight: bold; margin-bottom: 15px; color: #334155; }
+        table.equipment-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+        .equipment-table th, .equipment-table td { border: 1px solid #cbd5e1; padding: 10px 8px; text-align: left; font-size: 9.5pt; vertical-align: top; }
+        .equipment-table th { background-color: #334155; font-weight: bold; color: #ffffff; text-transform: uppercase; font-size: 8.5pt; letter-spacing: 0.5px; }
+        .equipment-table tbody tr:nth-child(even) { background-color: #f8fafc; }
+        .equipment-table tbody tr:last-child { font-weight: bold; background-color: #e2e8f0; color: #1e293b; }
+        .terms { margin-bottom: 25px; }
+        .terms h3 { font-size: 12pt; font-weight: bold; margin-bottom: 15px; color: #334155; }
+        table.terms-table { width: 100%; border-collapse: collapse; font-size: 10pt; border: 1px solid #cbd5e1; }
+        .terms-table th, .terms-table td { border: 1px solid #cbd5e1; padding: 10px; vertical-align: top; text-align: left; }
+        .terms-table th { width: 25%; background-color: #f1f5f9; font-weight: bold; color: #475569; }
+        .terms-table td { width: 75%; color: #1e293b; }
+        .closing { margin-bottom: 30px; font-size: 10pt; padding: 0 15px; }
+        .footer { text-align: center; border-top: 2px solid #e2e8f0; padding-top: 20px; margin-top: 40px; font-size: 9pt; display: flex; justify-content: center; gap: 30px; color: #64748b; }
+        .footer span { display: flex; align-items: center; gap: 8px; }
+        .underline-text { border-bottom: 2px solid #334155; display: inline-block; padding-bottom: 4px;}
       </style>
       <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     </head>
     <body>
       <div class="container">
         <div class="header">
-          <img src="${logoUrl}" class="logo" alt="ASEW Logo">
+          <div class="logo-container">
+            <img src="${logoUrl}" class="logo" alt="ASEW Logo">
+          </div>
           <div class="company-info">
             <h3>ASSOCIATED SCIENTIFIC & ENGINEERING WORKS</h3>
             <p>6-Rani Jhansi Road, Motia Khan, New Delhi-110055 (India)</p>
@@ -361,7 +370,9 @@ export const generatePDFBlob = async (
       });
     };
 
-    const hasImages = labEquipment.some((item) => item.image);
+    const hasImages = labEquipment.some(
+      (item) => item.image && item.image !== "",
+    );
 
     let tableHeaders = `<th>Sr. No.</th><th>Item</th><th>Specifications</th>`;
     if (showFields.make) tableHeaders += `<th>Make</th>`;
@@ -389,11 +400,13 @@ export const generatePDFBlob = async (
             src = item.image;
           }
           if (src) {
-            imageHtml = `<img src="${src}" width="50" height="50" style="object-fit: cover;">`;
+            imageHtml = `<img src="${src}" width="90" height="90" style="object-fit: contain; border: 1px solid #eee; border-radius: 6px;">`;
           }
         }
 
-        const imageCellHtml = hasImages ? `<td>${imageHtml}</td>` : "";
+        const imageCellHtml = hasImages
+          ? `<td style="text-align:center; padding: 4px;">${imageHtml}</td>`
+          : "";
         const makeCell = showFields.make
           ? `<td>${escapeHtml(item.make)}</td>`
           : "";
@@ -408,10 +421,10 @@ export const generatePDFBlob = async (
           : "";
 
         return `
-          <tr>
+          <tr style="page-break-inside: avoid;">
             <td style="text-align:center;">${index + 1}</td>
-            <td>${escapeHtml(item.item_name)}</td>
-            <td>${escapeHtml(item.specifications)}</td>
+            <td style="font-weight: bold; width: 180px;">${escapeHtml(item.item_name)}</td>
+            <td style="font-size: 9pt; white-space: pre-wrap;">${escapeHtml(item.specifications)}</td>
             ${makeCell}
             ${hsnCell}
             ${nablCell}
@@ -487,43 +500,50 @@ export const generatePDFBlob = async (
       <head>
         <title>Quotation ${escapeHtml(formData.Quotation_No)}</title>
         <style>
-          @media print { body { -webkit-print-color-adjust: exact !important; } }
-          body { font-family: Arial, Times, serif; font-size: 10pt; color: #333; margin: 20px; }
+          @media print { 
+            body { -webkit-print-color-adjust: exact !important; margin: 0; } 
+            .container { width: 100%; margin: 0; padding: 10mm; }
+          }
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 10pt; color: #333; margin: 20px; line-height: 1.4; }
           .container { width: 95%; margin: auto; }
-          .header { display: flex; align-items: center; border-bottom: 2px solid #000; padding: 15px; margin-bottom: 20px; background-color: #ADD8E6; }
-          .logo { width: 80px; margin-right: 20px; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; font-weight: bold; background: white; color: #000; height: 80px; text-align: center; font-size: 1.5rem; }
-          .company-info { flex-grow: 1; text-align: center; }
-          .company-info h3 { margin: 0; font-size: 12pt; font-weight: bold; text-transform: uppercase; color: #FF0000; white-space: nowrap; }
-          .company-info p { margin: 2px 0; font-size: 12pt; color: #000; }
-          .details { display: flex; justify-content: space-between; margin-bottom: 20px; }
-          .details-left, .details-right { width: 45%; }
-          .details-left p, .details-right p { margin: 5px 0; font-size: 10pt; }
-          .customer { margin-bottom: 20px; }
-          .customer p { margin: 5px 0; font-size: 10pt; }
-          .quotation-title { text-align: center; font-size: 14pt; font-weight: bold; margin-bottom: 10px; }
-          .intro { margin-bottom: 20px; font-size: 10pt; }
-          .equipment-title { font-size: 12pt; font-weight: bold; margin-bottom: 15px; }
-          table.equipment-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-          .equipment-table th, .equipment-table td { border: 1px solid #ccc; padding: 8px; text-align: left; font-size: 10pt; vertical-align: middle; }
-          .equipment-table th { background-color: #ADD8E6; font-weight: bold; color: #000; }
-          .equipment-table tbody tr:last-child { font-weight: bold; background-color: #f9f9f9; }
-          .terms { margin-bottom: 20px; }
-          .terms h3 { font-size: 12pt; font-weight: bold; margin-bottom: 10px; }
-          table.terms-table { width: 100%; border-collapse: collapse; font-size: 10pt; }
-          .terms-table th, .terms-table td { border: 1px solid #ccc; padding: 8px; vertical-align: top; text-align: left; }
-          .terms-table th { width: 30%; background-color: #f2f2f2; font-weight: bold; border-right: 2px solid #000; }
-          .terms-table td { width: 70%; }
-          .closing { margin-bottom: 20px; font-size: 10pt; }
-          .footer { text-align: center; border-top: 2px solid #000; padding-top: 10px; margin-top: 30px; font-size: 9pt; display: flex; justify-content: center; gap: 20px; }
-          .footer span { display: flex; align-items: center; gap: 5px; }
-          .underline-text { border-bottom: 1px solid #000; display: inline-block; padding-bottom: 2px;}
+          .header { display: flex; align-items: center; border-bottom: 3px solid #334155; padding: 20px; margin-bottom: 25px; background-color: #f8fafc; border-radius: 8px 8px 0 0; }
+          .logo-container { width: 160px; height: 100px; display: flex; align-items: center; justify-content: center; background: white; border-radius: 6px; padding: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-right: 25px; }
+          .logo { max-width: 100%; max-height: 100%; object-fit: contain; }
+          .company-info { flex-grow: 1; text-align: left; }
+          .company-info h3 { margin: 0 0 5px 0; font-size: 16pt; font-weight: 800; text-transform: uppercase; color: #dc2626; letter-spacing: 0.5px; }
+          .company-info p { margin: 2px 0; font-size: 11pt; color: #475569; font-weight: 500; }
+          .details { display: flex; justify-content: space-between; margin-bottom: 25px; padding: 15px; background-color: #f1f5f9; border-radius: 8px; }
+          .details-left, .details-right { width: 48%; }
+          .details-left p, .details-right p { margin: 4px 0; font-size: 10pt; }
+          .customer { margin-bottom: 25px; padding: 0 15px; }
+          .customer p { margin: 4px 0; font-size: 10pt; color: #1e293b; }
+          .quotation-title { text-align: center; font-size: 16pt; font-weight: 800; margin-bottom: 20px; color: #1e293b; text-transform: uppercase; }
+          .intro { margin-bottom: 20px; font-size: 10pt; padding: 0 15px; }
+          .equipment-title { font-size: 12pt; font-weight: bold; margin-bottom: 15px; color: #334155; }
+          table.equipment-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
+          .equipment-table th, .equipment-table td { border: 1px solid #cbd5e1; padding: 10px 8px; text-align: left; font-size: 9.5pt; vertical-align: top; }
+          .equipment-table th { background-color: #334155; font-weight: bold; color: #ffffff; text-transform: uppercase; font-size: 8.5pt; letter-spacing: 0.5px; }
+          .equipment-table tbody tr:nth-child(even) { background-color: #f8fafc; }
+          .equipment-table tbody tr:last-child { font-weight: bold; background-color: #e2e8f0; color: #1e293b; }
+          .terms { margin-bottom: 25px; }
+          .terms h3 { font-size: 12pt; font-weight: bold; margin-bottom: 15px; color: #334155; }
+          table.terms-table { width: 100%; border-collapse: collapse; font-size: 10pt; border: 1px solid #cbd5e1; }
+          .terms-table th, .terms-table td { border: 1px solid #cbd5e1; padding: 10px; vertical-align: top; text-align: left; }
+          .terms-table th { width: 25%; background-color: #f1f5f9; font-weight: bold; color: #475569; }
+          .terms-table td { width: 75%; color: #1e293b; }
+          .closing { margin-bottom: 30px; font-size: 10pt; padding: 0 15px; }
+          .footer { text-align: center; border-top: 2px solid #e2e8f0; padding-top: 20px; margin-top: 40px; font-size: 9pt; display: flex; justify-content: center; gap: 30px; color: #64748b; }
+          .footer span { display: flex; align-items: center; gap: 8px; }
+          .underline-text { border-bottom: 2px solid #334155; display: inline-block; padding-bottom: 4px;}
         </style>
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
       </head>
       <body>
         <div class="container">
           <div class="header">
-            <img src="${logoUrl}" class="logo" alt="ASEW Logo">
+            <div class="logo-container">
+              <img src="${logoUrl}" class="logo" alt="ASEW Logo">
+            </div>
             <div class="company-info">
               <h3>ASSOCIATED SCIENTIFIC & ENGINEERING WORKS</h3>
               <p>6-Rani Jhansi Road, Motia Khan, New Delhi-110055 (India)</p>
