@@ -290,7 +290,11 @@ const QuotationForm = () => {
       });
 
       const nextSeq = maxSeq + 1;
-      const year = new Date().getFullYear();
+      const currentDate = new Date();
+      let year = currentDate.getFullYear();
+      if (currentDate.getMonth() < 3) {
+        year -= 1;
+      }
       const nextYearLastTwo = String(year + 1).slice(-2);
       const currentYear = String(year);
       const quotationNo = `${currentYear}-${nextYearLastTwo}/QT/${String(
