@@ -642,16 +642,22 @@ const QuotationForm = () => {
           });
         })
         .catch((error) => {
-          toast.error(error || "Failed to save quotation");
+          toast.error(error || "Failed to save quotation", {
+            id: loadingToastId,
+          });
         });
     } else if (actionType === "submit") {
       dispatch(createResponse(data))
         .unwrap()
         .then(() => {
-          toast.success("Quotation response submitted successfully!");
+          toast.success("Quotation response submitted successfully!", {
+            id: loadingToastId,
+          });
         })
         .catch((error) => {
-          toast.error(error || "Failed to submit quotation response");
+          toast.error(error || "Failed to submit quotation response", {
+            id: loadingToastId,
+          });
         });
     }
   };
