@@ -621,6 +621,7 @@ const QuotationForm = () => {
           toast.success("Quotation saved successfully!", {
             id: loadingToastId,
           });
+          setTimeout(() => window.location.reload(), 1500);
         })
         .catch((error) => {
           toast.error(error || "Failed to save quotation", {
@@ -634,6 +635,7 @@ const QuotationForm = () => {
           toast.success("Quotation response submitted successfully!", {
             id: loadingToastId,
           });
+          setTimeout(() => window.location.reload(), 1500);
         })
         .catch((error) => {
           toast.error(error || "Failed to submit quotation response", {
