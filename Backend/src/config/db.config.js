@@ -1,5 +1,5 @@
-const sheets = require("./googleSheet");
 require("dotenv").config();
+const sheets = require("./googleSheet");
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
 
@@ -18,13 +18,20 @@ const insertByHeader = async (sheetName, dataObject) => {
     range: `${sheetName}!1:1`,
   });
 
-  const rawHeaders = headerRes.data.values[0];
-
+  const rawHeaders = headerRes.data.values[0].map((h) => h.trim());
+  
   const row = rawHeaders.map((header) => dataObject[header] ?? "");
-
-  await sheets.spreadsheets.values.append({
+  
+  // Explicitly find the next row instead of relying on append
+  const allRowsRes = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A:ZZ`,
+    range: `${sheetName}!A:A`,
+  });
+  const nextRow = (allRowsRes.data.values ? allRowsRes.data.values.length : 0) + 1;
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!A${nextRow}`,
     valueInputOption: "USER_ENTERED",
     requestBody: { values: [row] },
   });
@@ -41,15 +48,22 @@ const insertMultipleByHeader = async (sheetName, dataObjects) => {
     range: `${sheetName}!1:1`,
   });
 
-  const rawHeaders = headerRes.data.values[0];
+  const rawHeaders = headerRes.data.values[0].map((h) => h.trim());
 
   const rows = dataObjects.map((dataObject) => {
     return rawHeaders.map((header) => dataObject[header] ?? "");
   });
 
-  await sheets.spreadsheets.values.append({
+  // Explicitly find the next row instead of relying on append
+  const allRowsRes = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A:ZZ`,
+    range: `${sheetName}!A:A`,
+  });
+  const nextRow = (allRowsRes.data.values ? allRowsRes.data.values.length : 0) + 1;
+
+  await sheets.spreadsheets.values.update({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!A${nextRow}`,
     valueInputOption: "USER_ENTERED",
     requestBody: { values: rows },
   });
@@ -68,7 +82,7 @@ const getAll = async (sheetName) => {
 
   return rows.map((row) =>
     headers.reduce((obj, key, i) => {
-      obj[key] = row[i] ?? null;
+      obj[key] = row[i] !== undefined && row[i] !== null ? row[i].toString().trim() : null;
       return obj;
     }, {}),
   );
@@ -100,10 +114,6 @@ const clearSheet = async (sheetName) => {
  * ✅ UPDATE BY ID (Column A)
  */
 const updateById = async (sheetName, id, updatedData, idColumn = null) => {
-  console.log(
-    `[db] updateById: sheet=${sheetName}, id=${id}, idCol=${idColumn || "Column A"}`,
-  );
-
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     range: `${sheetName}!A:ZZ`,
@@ -155,8 +165,6 @@ const updateById = async (sheetName, id, updatedData, idColumn = null) => {
       ? updatedData[header]
       : rows[rowIndex][colIndex] || "";
   });
-
-  console.log(`[db] Updating row ${rowIndex + 1} with data:`, updatedData);
 
   // ✅ Update Google Sheet row
   await sheets.spreadsheets.values.update({

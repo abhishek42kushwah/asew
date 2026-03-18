@@ -111,8 +111,9 @@ const QuotationForm = () => {
   }));
 
   const itemOptions = masterItems.map((mi) => ({
-    value: mi.ITEM_NAME ? mi.ITEM_NAME.trim() : "",
+    value: mi.ITEM_CODE || mi.ITEM_NAME || "", // Use ITEM_CODE if available
     label: mi.ITEM_NAME ? mi.ITEM_NAME.trim() : "",
+    itemName: mi.ITEM_NAME || ""
   }));
 
   const customSelectStyles = {
@@ -316,8 +317,11 @@ const QuotationForm = () => {
     updated[index][field] = value;
 
     if (field === "item_name") {
-      const selectedItem = masterItems.find((item) => item.ITEM_NAME?.trim() === value?.trim());
+      const selectedItem = masterItems.find((item) => 
+        (item.ITEM_CODE === value) || (item.ITEM_NAME?.trim() === value?.trim())
+      );
       if (selectedItem) {
+        updated[index].item_name = selectedItem.ITEM_NAME || value;
         updated[index].specifications = selectedItem.SPECIFICATIONS || "";
         const priceStr = selectedItem.UNIT_PRICE || "0";
         updated[index].unit_price = parseFloat(priceStr.replace(/,/g, "")) || 0;
@@ -367,6 +371,21 @@ const QuotationForm = () => {
         values.labEquipment.filter((_, i) => i !== index),
       );
     }
+  };
+
+  const cloneEquipment = (index) => {
+    const itemToClone = { ...values.labEquipment[index] };
+    const newItem = {
+      ...itemToClone,
+      id: Date.now(), // Generate a new ID for the clone
+    };
+    
+    setFieldValue("labEquipment", [
+      ...values.labEquipment.slice(0, index + 1),
+      newItem,
+      ...values.labEquipment.slice(index + 1),
+    ]);
+    toast.success("Row cloned successfully");
   };
 
   const calculateSubtotal = () => {
@@ -561,9 +580,6 @@ const QuotationForm = () => {
         };
         dispatch(updateItemMaster({ name: item.item_name, itemData }))
           .unwrap()
-          .then(() =>
-            console.log(`[AutoSync] "${item.item_name}" updated in Master`),
-          )
           .catch((err) =>
             console.error(`[AutoSync] Failed for "${item.item_name}":`, err),
           );
@@ -586,11 +602,6 @@ const QuotationForm = () => {
           }),
         )
           .unwrap()
-          .then(() =>
-            console.log(
-              `[AutoSync] Customer "${values.Customer_Name}" updated`,
-            ),
-          )
           .catch((err) =>
             console.error(`[AutoSync] Customer update failed:`, err),
           );
@@ -1035,7 +1046,7 @@ const QuotationForm = () => {
                         <Select
                           options={itemOptions}
                           value={itemOptions.find(
-                            (opt) => opt.value === item.item_name?.trim(),
+                            (opt) => opt.value === item.item_name || opt.itemName === item.item_name
                           )}
                           onChange={(selected) =>
                             handleEquipmentChange(
@@ -1200,13 +1211,24 @@ const QuotationForm = () => {
                       />
                     </td>
                     <td className="p-2 border border-gray-200 text-center">
-                      <button
-                        type="button"
-                        onClick={() => removeEquipment(index)}
-                        className="bg-red-500 text-white p-2.5 rounded hover:bg-red-600 transition-colors"
-                      >
-                        <FaTrash />
-                      </button>
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => cloneEquipment(index)}
+                          title="Clone Row"
+                          className="bg-[#f39c12] text-white p-2 rounded hover:bg-[#e67e22] transition-colors"
+                        >
+                          <FaCopy size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeEquipment(index)}
+                          title="Delete Row"
+                          className="bg-red-500 text-white p-2 rounded hover:bg-red-600 transition-colors"
+                        >
+                          <FaTrash size={12} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

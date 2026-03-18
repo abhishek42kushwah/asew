@@ -107,7 +107,6 @@ exports.createSave = async (req, res) => {
         Contact_Person: data.Contact_Person,
         Contact_Mobile: data.Contact_Mobile,
         Email_Address: data.Email_Address,
-        Item_Name: item.item_name,
         SPECIFICATIONS: item.specifications,
         Qty: item.qty,
         Unit_Price: unitPrice,
@@ -120,7 +119,7 @@ exports.createSave = async (req, res) => {
         Packaging_Charges: data.Packaging_Charges,
         Total_Amount: data.Total_Amount,
         Generated_PDF: Generated_PDF,
-        ITEMS: items.map((i) => i.item_name).join(", "),
+        ITEMS: item.item_name, // Store individual item name here
         Freight_Note: data.Freight_Note,
         Packaging_Note: data.Packaging_Note,
         Term_Tax: data.Term_Tax || "Extra, GST @ 18%",
@@ -144,7 +143,6 @@ exports.createSave = async (req, res) => {
     await db.insertMultipleByHeader(SHEET_NAME, rowsToInsert);
 
     const duration = Date.now() - startTime;
-    console.log(`[createSave] Optimized Save took ${duration}ms`);
 
     res.status(201).json({
       success: true,
@@ -207,18 +205,20 @@ exports.getAllSave = async (req, res) => {
           console.error("Failed to parse ITEMS for Quotation:", r.Quotation_No, e);
         }
       } else {
-        let resolvedItemName = r.Item_Name || r['Item Name'] || "";
-        
-        // If Item_Name is entirely missing from the sheet columns but ITEMS has the comma-separated names
-        if (!resolvedItemName && typeof r.ITEMS === 'string' && !r.ITEMS.trim().startsWith("[")) {
-          const itemsArray = r.ITEMS.split(',').map(s => s.trim());
-          const currentIndex = grouped[r.Quotation_No].items.length;
-          // Fallback to the array index of ITEMS. 
-          if (currentIndex < itemsArray.length) {
-            resolvedItemName = itemsArray[currentIndex];
-          } else {
-            resolvedItemName = r.ITEMS; 
-          }
+        // Hyper-robust fallback for item names (covers old, new, and manual sheet variations)
+        let resolvedItemName = 
+          r.Item_Name || 
+          r.ITEMS || 
+          r['Item Name'] || 
+          r['Item_name'] || 
+          r['item_name'] || 
+          r['Items'] || 
+          "";
+          
+        // Smart split for old records: if ITEMS is a joined list (contains comma),
+        // check if SPECIFICATIONS contains the actual individual item name.
+        if (resolvedItemName.includes(",") && r.SPECIFICATIONS && resolvedItemName.includes(r.SPECIFICATIONS)) {
+          resolvedItemName = r.SPECIFICATIONS;
         }
 
         grouped[r.Quotation_No].items.push({
