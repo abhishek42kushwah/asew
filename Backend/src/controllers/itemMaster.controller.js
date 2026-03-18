@@ -38,8 +38,6 @@ exports.createItem = async (req, res) => {
       MAKE: "ASEW",
       STOCK_HOLD: STOCK_HOLD || 1,
       NABL: NABL || "",
-      CREATED_AT: new Date().toISOString(),
-      UPDATED_AT: new Date().toISOString(),
     });
 
     res.status(201).json({
@@ -84,7 +82,6 @@ exports.updateItem = async (req, res) => {
       name,
       {
         ...updateData,
-        UPDATED_AT: new Date().toISOString(),
       },
       "ITEM_NAME",
     );

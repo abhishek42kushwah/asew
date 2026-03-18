@@ -63,7 +63,7 @@ exports.createResponse = async (req, res) => {
 
       const unitPrice = item.unit_price || master.UNIT_PRICE || 0;
 
-      const hsn = master.HSN_CODE || item.hsn_code || "";
+      const hsn = master.HSN_CODE || item.hsn_code || item.hsn || "";
 
       const make = master.MAKE || item.make || "";
 
@@ -98,7 +98,7 @@ exports.createResponse = async (req, res) => {
 
         Generated_PDF: Generated_PDF,
 
-        ITEMS: JSON.stringify(items),
+        ITEMS: items.map((i) => i.item_name).join(", "),
 
         Freight_Note: data.Freight_Note,
         Packaging_Note: data.Packaging_Note,
@@ -123,10 +123,7 @@ exports.createResponse = async (req, res) => {
         Term_Payment:
           data.Term_Payment || "30% advance & balance at the time of dispatch",
 
-        NABL: data.NABL,
-
-        Created_at: new Date().toISOString(),
-        Updated_at: new Date().toISOString(),
+        NABL: item.nabl || data.NABL || "",
       };
 
       await db.insertByHeader(SHEET_NAME, rowData);
@@ -177,17 +174,53 @@ exports.getAllResponse = async (req, res) => {
         };
       }
 
-      grouped[r.Quotation_No].items.push({
-        Item_Name: r.Item_Name,
-        SPECIFICATIONS: r.SPECIFICATIONS,
-        Qty: r.Qty,
-        Unit_Price: r.Unit_Price,
-        Total_Price: r.Total_Price,
-        HSN_Code: r.HSN_Code,
-        Make: r.Make,
-        NABL: r.NABL,
-        Item_Discount: r.Item_Discount,
-      });
+      // Backward compatibility for old records where ITEMS stored the full JSON array
+      if (!r.Item_Name && typeof r.ITEMS === 'string' && r.ITEMS.trim().startsWith("[")) {
+        try {
+          const parsedItems = JSON.parse(r.ITEMS);
+          parsedItems.forEach((item) => {
+            grouped[r.Quotation_No].items.push({
+              Item_Name: item.item_name || item.Item_Name || "",
+              SPECIFICATIONS: item.specifications || item.SPECIFICATIONS || "",
+              Qty: item.qty || item.Qty || 1,
+              Unit_Price: item.unit_price || item.Unit_Price || 0,
+              Total_Price: item.total_price || item.Total_Price || 0,
+              HSN_Code: item.hsn || item.hsn_code || item.HSN_Code || "",
+              Make: item.make || item.Make || "",
+              NABL: item.nabl || item.NABL || "",
+              Item_Discount: item.discount_percent || item.discount || item.Item_Discount || 0,
+            });
+          });
+        } catch (e) {
+          console.error("Failed to parse ITEMS for Response Quotation:", r.Quotation_No, e);
+        }
+      } else {
+        let resolvedItemName = r.Item_Name || r['Item Name'] || "";
+        
+        // If Item_Name is entirely missing from the sheet columns but ITEMS has the comma-separated names
+        if (!resolvedItemName && typeof r.ITEMS === 'string' && !r.ITEMS.trim().startsWith("[")) {
+          const itemsArray = r.ITEMS.split(',').map(s => s.trim());
+          const currentIndex = grouped[r.Quotation_No].items.length;
+          // Fallback to the array index of ITEMS. 
+          if (currentIndex < itemsArray.length) {
+            resolvedItemName = itemsArray[currentIndex];
+          } else {
+            resolvedItemName = r.ITEMS; 
+          }
+        }
+
+        grouped[r.Quotation_No].items.push({
+          Item_Name: resolvedItemName,
+          SPECIFICATIONS: r.SPECIFICATIONS,
+          Qty: r.Qty,
+          Unit_Price: r.Unit_Price,
+          Total_Price: r.Total_Price,
+          HSN_Code: r.HSN_Code,
+          Make: r.Make,
+          NABL: r.NABL,
+          Item_Discount: r.Item_Discount,
+        });
+      }
     });
 
     res.json({

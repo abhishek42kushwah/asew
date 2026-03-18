@@ -22,6 +22,7 @@ const CustomerModal = ({ isOpen, onClose, onSuccess }) => {
       /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/,
       "Invalid GSTIN format",
     ),
+    Delivery_Address: Yup.string(),
   });
 
   const formik = useFormik({
@@ -33,6 +34,7 @@ const CustomerModal = ({ isOpen, onClose, onSuccess }) => {
       Contact_Person: "",
       Email_Address: "",
       Contact_Mobile: "",
+      Delivery_Address: "",
     },
     validationSchema,
     onSubmit: async (values, { setSubmitting, resetForm }) => {
@@ -98,12 +100,22 @@ const CustomerModal = ({ isOpen, onClose, onSuccess }) => {
               <label className="text-sm font-semibold text-gray-600">
                 Customer Name *
               </label>
-              <input
-                type="text"
+              <textarea
                 {...formik.getFieldProps("Customer_Name")}
-                className={inputClass("Customer_Name")}
+                className={`${inputClass("Customer_Name")} min-h-[80px]`}
               />
               {errorMsg("Customer_Name")}
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-semibold text-gray-600">
+                Delivery Address
+              </label>
+              <textarea
+                {...formik.getFieldProps("Delivery_Address")}
+                className={`${inputClass("Delivery_Address")} min-h-[80px]`}
+              />
+              {errorMsg("Delivery_Address")}
             </div>
 
             <div className="flex flex-col gap-1">

@@ -15,7 +15,6 @@ const createResponseSheet = async () => {
       "Contact_Person",
       "Contact_Mobile",
       "Email_Address",
-      "Item_Name",
       "SPECIFICATIONS",
       "Qty",
       "Unit_Price",
@@ -40,8 +39,6 @@ const createResponseSheet = async () => {
       "Item_Discount",
       "Term_Payment",
       "NABL",
-      "Created_at",
-      "Updated_at",
     ],
   ];
 

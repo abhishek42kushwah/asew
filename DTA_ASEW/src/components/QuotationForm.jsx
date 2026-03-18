@@ -97,7 +97,7 @@ const QuotationForm = () => {
       ],
     },
     validationSchema,
-    onSubmit: (values) => {
+    onSubmit: () => {
       // Logic handled by handleSubmit
     },
   });
@@ -111,8 +111,8 @@ const QuotationForm = () => {
   }));
 
   const itemOptions = masterItems.map((mi) => ({
-    value: mi.ITEM_NAME,
-    label: mi.ITEM_NAME,
+    value: mi.ITEM_NAME ? mi.ITEM_NAME.trim() : "",
+    label: mi.ITEM_NAME ? mi.ITEM_NAME.trim() : "",
   }));
 
   const customSelectStyles = {
@@ -165,23 +165,7 @@ const QuotationForm = () => {
       if (found) {
         // Extract data
         const header = found.header || found;
-        // PRIORITIZE stringified ITEMS if available in header (more robust)
-        let items = [];
-        if (header.ITEMS) {
-          try {
-            items =
-              typeof header.ITEMS === "string"
-                ? JSON.parse(header.ITEMS)
-                : header.ITEMS;
-          } catch (e) {
-            console.error("JSON parse error for ITEMS:", e);
-          }
-        }
-
-        // Fallback to row-based items if JSON is empty/null
-        if (!items || items.length === 0) {
-          items = found.items || [];
-        }
+        const items = found.items || [];
 
         setValues((prev) => ({
           ...prev,
@@ -207,7 +191,7 @@ const QuotationForm = () => {
           labEquipment: items.map((item, idx) => ({
             id: Date.now() + idx,
             // Backend stores as Item_Name (PascalCase); also cover camelCase & UPPERCASE
-            item_name: item.item_name || item.Item_Name || item.ITEM_NAME || "",
+            item_name: (item.item_name || item.Item_Name || item.ITEM_NAME || "").trim(),
             specifications: item.specifications || item.SPECIFICATIONS || "",
             qty: Number(item.qty || item.Qty || item.QTY || 1),
             unit_price: Number(
@@ -332,7 +316,7 @@ const QuotationForm = () => {
     updated[index][field] = value;
 
     if (field === "item_name") {
-      const selectedItem = masterItems.find((item) => item.ITEM_NAME === value);
+      const selectedItem = masterItems.find((item) => item.ITEM_NAME?.trim() === value?.trim());
       if (selectedItem) {
         updated[index].specifications = selectedItem.SPECIFICATIONS || "";
         const priceStr = selectedItem.UNIT_PRICE || "0";
@@ -436,20 +420,7 @@ const QuotationForm = () => {
 
       if (found) {
         const header = found.header || found;
-        let items = [];
-        if (found.items && Array.isArray(found.items)) {
-          items = found.items;
-        } else if (found.ITEMS) {
-          items =
-            typeof found.ITEMS === "string"
-              ? JSON.parse(found.ITEMS)
-              : found.ITEMS;
-        } else if (header.ITEMS) {
-          items =
-            typeof header.ITEMS === "string"
-              ? JSON.parse(header.ITEMS)
-              : header.ITEMS;
-        }
+        const items = found.items || [];
 
         setValues((prev) => ({
           ...prev,
@@ -474,7 +445,7 @@ const QuotationForm = () => {
           Term_Warranty: header.Term_Warranty || prev.Term_Warranty,
           labEquipment: items.map((item, idx) => ({
             id: Date.now() + idx,
-            item_name: item.item_name || item.Item_Name || item.ITEM_NAME || "",
+            item_name: (item.item_name || item.Item_Name || item.ITEM_NAME || "").trim(),
             specifications: item.specifications || item.SPECIFICATIONS || "",
             qty: Number(item.qty || item.Qty || item.QTY || 1),
             unit_price: Number(item.unit_price || item.Unit_Price || 0),
@@ -506,16 +477,9 @@ const QuotationForm = () => {
 
         setShowFields({
           hsn: !!hasHSN,
-          nabl: items.some(
-            (i) => (i.nabl || i.NABL) && (i.nabl || i.NABL) !== "No",
-          ),
+          nabl: !!hasNABL,
           make: !!hasMake,
-          discount: items.some(
-            (i) =>
-              Number(
-                i.discount_percent || i.Item_Discount || i.Discount_Percent,
-              ) > 0,
-          ),
+          discount: !!hasDiscount,
         });
 
         toast.success(`Quotation "${searchNo}" copied successfully!`);
@@ -614,6 +578,7 @@ const QuotationForm = () => {
           Contact_Person: values.Contact_Person,
           Email_Address: values.Email_Address,
           Contact_Mobile: values.Contact_Mobile,
+          Delivery_Address: values.Delivery_Address,
         };
         dispatch(
           updateCustomerMaster({
@@ -1070,7 +1035,7 @@ const QuotationForm = () => {
                         <Select
                           options={itemOptions}
                           value={itemOptions.find(
-                            (opt) => opt.value === item.item_name,
+                            (opt) => opt.value === item.item_name?.trim(),
                           )}
                           onChange={(selected) =>
                             handleEquipmentChange(

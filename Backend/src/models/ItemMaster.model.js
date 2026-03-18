@@ -18,9 +18,7 @@ const createItemMasterSheet = async () => {
     "HSN_CODE",
     "MAKE",
     "STOCK_HOLD",
-    "NABL",
-    "CREATED_AT",
-    "UPDATED_AT"
+    "NABL"
   ]];
 
   try {

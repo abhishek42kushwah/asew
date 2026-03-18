@@ -15,6 +15,7 @@ exports.createCustomer = async (req, res) => {
       Contact_Person,
       Email_Address,
       Contact_Mobile,
+      Delivery_Address,
     } = req.body;
 
     await db.insertByHeader(SHEET_NAME, {
@@ -26,8 +27,7 @@ exports.createCustomer = async (req, res) => {
       Contact_Person,
       Email_Address,
       Contact_Mobile,
-      Created_at: new Date().toISOString(),
-      Updated_at: new Date().toISOString(),
+      Delivery_Address,
     });
 
     res.status(201).json({
@@ -87,7 +87,6 @@ exports.updateCustomer = async (req, res) => {
       name,
       {
         ...updateData,
-        Updated_at: new Date().toISOString(),
       },
       "Customer_Name",
     );
