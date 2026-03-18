@@ -165,6 +165,12 @@ exports.getAllResponse = async (req, res) => {
 
     const grouped = {};
 
+    // Pre-pass to count rows per quotation (used for intelligent splitting of old records)
+    const rowCounts = {};
+    filteredRows.forEach(r => {
+      rowCounts[r.Quotation_No] = (rowCounts[r.Quotation_No] || 0) + 1;
+    });
+
     filteredRows.forEach((r) => {
       if (!grouped[r.Quotation_No]) {
         grouped[r.Quotation_No] = {
@@ -204,10 +210,19 @@ exports.getAllResponse = async (req, res) => {
           r['Items'] || 
           "";
           
-        // Smart split for old records: if ITEMS is a joined list (contains comma),
-        // check if SPECIFICATIONS contains the actual individual item name.
+        // Smart split for old records:
+        // 1. First check if SPECIFICATIONS contains the exact individual name
         if (resolvedItemName.includes(",") && r.SPECIFICATIONS && resolvedItemName.includes(r.SPECIFICATIONS)) {
           resolvedItemName = r.SPECIFICATIONS;
+        } else if (resolvedItemName.includes(",")) {
+          // 2. Intelligent fallback: if number of parts matches total row count for this quotation, split by index
+          const parts = resolvedItemName.split(",").map(s => s.trim()).filter(Boolean);
+          const totalRowsForThisQ = rowCounts[r.Quotation_No] || 0;
+          const currentIndex = grouped[r.Quotation_No].items.length;
+          
+          if (parts.length === totalRowsForThisQ && currentIndex < parts.length) {
+            resolvedItemName = parts[currentIndex];
+          }
         }
 
         grouped[r.Quotation_No].items.push({
