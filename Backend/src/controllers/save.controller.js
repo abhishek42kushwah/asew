@@ -56,11 +56,21 @@ exports.createSave = async (req, res) => {
     const uploadedImages = uploadResults.filter((r) => r.type === "image");
     const imageMap = new Map(uploadedImages.map((r) => [r.index, r.url]));
 
-    // 3. Optimized Quotation No generation
+    // 3. Optimized Quotation No generation (Max + 1 logic)
     let quotationNo = data.Quotation_No;
     if (!quotationNo) {
-      const uniqueNumbers = [...new Set(allRows.map((r) => r.Quotation_No))];
-      const nextNumber = uniqueNumbers.length + 1;
+      let maxSeq = 0;
+      allRows.forEach((r) => {
+        const no = r.Quotation_No;
+        if (no) {
+          const parts = no.split("/");
+          const seq = parseInt(parts[parts.length - 1]);
+          if (!isNaN(seq) && seq > maxSeq) {
+            maxSeq = seq;
+          }
+        }
+      });
+      const nextNumber = maxSeq + 1;
       quotationNo = `2025-26/QT/${String(nextNumber).padStart(4, "0")}`;
     }
 

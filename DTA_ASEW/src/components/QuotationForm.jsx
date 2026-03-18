@@ -52,8 +52,8 @@ const QuotationForm = () => {
   const dispatch = useDispatch();
   const { customers } = useSelector((state) => state.customer);
   const { items: masterItems } = useSelector((state) => state.item);
-  const { saves } = useSelector((state) => state.save);
-  const { responses } = useSelector((state) => state.response);
+  const { saves, isLoading: saveLoading } = useSelector((state) => state.save);
+  const { responses, isLoading: responseLoading } = useSelector((state) => state.response);
 
   const formik = useFormik({
     initialValues: {
@@ -258,7 +258,8 @@ const QuotationForm = () => {
   }, [dispatch]);
 
   useEffect(() => {
-    if ((saves.length > 0 || responses.length > 0) && !values.Quotation_No) {
+    const isDataLoaded = !saveLoading && !responseLoading;
+    if (isDataLoaded && (saves.length > 0 || responses.length > 0) && !values.Quotation_No) {
       const allNos = [
         ...saves.map((s) => s.header?.Quotation_No || s.Quotation_No),
         ...responses.map((r) => r.header?.Quotation_No || r.Quotation_No),
@@ -288,7 +289,7 @@ const QuotationForm = () => {
 
       setFieldValue("Quotation_No", quotationNo);
     }
-  }, [saves, responses, values.Quotation_No, setFieldValue]);
+  }, [saves, responses, saveLoading, responseLoading, values.Quotation_No, setFieldValue]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;

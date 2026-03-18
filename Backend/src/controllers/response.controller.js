@@ -39,8 +39,18 @@ exports.createResponse = async (req, res) => {
 
     if (!quotationNo) {
       const allRows = await db.getAll(SHEET_NAME);
-      const uniqueNumbers = [...new Set(allRows.map((r) => r.Quotation_No))];
-      const nextNumber = uniqueNumbers.length + 1;
+      let maxSeq = 0;
+      allRows.forEach((r) => {
+        const no = r.Quotation_No;
+        if (no) {
+          const parts = no.split("/");
+          const seq = parseInt(parts[parts.length - 1]);
+          if (!isNaN(seq) && seq > maxSeq) {
+            maxSeq = seq;
+          }
+        }
+      });
+      const nextNumber = maxSeq + 1;
       quotationNo = `2025-26/RS/${String(nextNumber).padStart(4, "0")}`; // Using RS for Response
     }
 
