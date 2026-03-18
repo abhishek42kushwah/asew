@@ -180,7 +180,7 @@ export const generateQuotationPDF = (
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Quotation ${escapeHtml(formData.Quotation_No)}</title>
+     
       <style>
         @media print { 
           body { -webkit-print-color-adjust: exact !important; margin: 0; } 
@@ -188,7 +188,7 @@ export const generateQuotationPDF = (
         }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 10pt; color: #333; margin: 20px; line-height: 1.4; }
         .container { width: 95%; margin: auto; }
-        .header { display: flex; align-items: center; border-bottom: 3px solid #334155; padding: 20px; margin-bottom: 25px; background-color: #f8fafc; border-radius: 8px 8px 0 0; }
+        .header { display: flex; align-items: center; border-bottom: 3px solid #000000; padding: 20px; margin-bottom: 25px; background-color: #ADD8E6; }
         .logo-container { width: 160px; height: 100px; display: flex; align-items: center; justify-content: center; background: white; border-radius: 6px; padding: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-right: 25px; }
         .logo { max-width: 100%; max-height: 100%; object-fit: contain; }
         .company-info { flex-grow: 1; text-align: left; }
@@ -207,13 +207,14 @@ export const generateQuotationPDF = (
         .equipment-table th { background-color: #334155; font-weight: bold; color: #ffffff; text-transform: uppercase; font-size: 8.5pt; letter-spacing: 0.5px; }
         .equipment-table tbody tr:nth-child(even) { background-color: #f8fafc; }
         .equipment-table tbody tr:last-child { font-weight: bold; background-color: #e2e8f0; color: #1e293b; }
-        .terms { margin-bottom: 25px; }
+        .terms { margin-bottom: 25px; page-break-inside: avoid; }
         .terms h3 { font-size: 12pt; font-weight: bold; margin-bottom: 15px; color: #334155; }
         table.terms-table { width: 100%; border-collapse: collapse; font-size: 10pt; border: 1px solid #cbd5e1; }
+        .terms-table tr { page-break-inside: avoid; }
         .terms-table th, .terms-table td { border: 1px solid #cbd5e1; padding: 10px; vertical-align: top; text-align: left; }
         .terms-table th { width: 25%; background-color: #f1f5f9; font-weight: bold; color: #475569; }
         .terms-table td { width: 75%; color: #1e293b; }
-        .closing { margin-bottom: 30px; font-size: 10pt; padding: 0 15px; }
+        .closing { margin-bottom: 30px; font-size: 10pt; padding: 0 15px; page-break-inside: avoid; }
         .footer { text-align: center; border-top: 2px solid #e2e8f0; padding-top: 20px; margin-top: 40px; font-size: 9pt; display: flex; justify-content: center; gap: 30px; color: #64748b; }
         .footer span { display: flex; align-items: center; gap: 8px; }
         .underline-text { border-bottom: 2px solid #334155; display: inline-block; padding-bottom: 4px;}
@@ -286,7 +287,7 @@ export const generateQuotationPDF = (
             <tr><th>Payment</th><td>${escapeHtml(formData.Term_Payment || "")}</td></tr>
             <tr><th>Delivery</th><td>${escapeHtml(formData.Term_Delivery || "")}</td></tr>
             <tr><th>Warranty</th><td>${escapeHtml(formData.Term_Warranty || "").replace(/\n/g, "<br>")}</td></tr>
-            <tr><th>Grand Total</th><td><strong>${totals.grandTotal.toFixed(2)}</strong></td></tr>
+          
           </table>
         </div>
         <div class="closing">
@@ -295,9 +296,9 @@ export const generateQuotationPDF = (
           <p><strong>For Associated Scientific & Engg. Works</strong></p>
         </div>
         <div class="footer">
-          <span><i class="fas fa-phone"></i> 9873711119, 9873811119</span>
-          <span><i class="fas fa-globe"></i> www.asewindia.com</span>
-          <span><i class="fas fa-envelope"></i> sales@asewindia.com</span>
+          <span><strong>Tel:</strong> 9873711119, 9873811119</span>
+          <span><strong>Web:</strong> www.asewindia.com</span>
+          <span><strong>Email:</strong> sales@asewindia.com</span>
         </div>
       </div>
     </body>
@@ -498,7 +499,7 @@ export const generatePDFBlob = async (
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Quotation ${escapeHtml(formData.Quotation_No)}</title>
+      
         <style>
           @media print { 
             body { -webkit-print-color-adjust: exact !important; margin: 0; } 
@@ -506,7 +507,7 @@ export const generatePDFBlob = async (
           }
           body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 10pt; color: #333; margin: 20px; line-height: 1.4; }
           .container { width: 95%; margin: auto; }
-          .header { display: flex; align-items: center; border-bottom: 3px solid #334155; padding: 20px; margin-bottom: 25px; background-color: #f8fafc; border-radius: 8px 8px 0 0; }
+          .header { display: flex; align-items: center; border-bottom: 3px solid #000000; padding: 20px; margin-bottom: 25px; background-color: #ADD8E6; }
           .logo-container { width: 160px; height: 100px; display: flex; align-items: center; justify-content: center; background: white; border-radius: 6px; padding: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-right: 25px; }
           .logo { max-width: 100%; max-height: 100%; object-fit: contain; }
           .company-info { flex-grow: 1; text-align: left; }
@@ -525,13 +526,14 @@ export const generatePDFBlob = async (
           .equipment-table th { background-color: #334155; font-weight: bold; color: #ffffff; text-transform: uppercase; font-size: 8.5pt; letter-spacing: 0.5px; }
           .equipment-table tbody tr:nth-child(even) { background-color: #f8fafc; }
           .equipment-table tbody tr:last-child { font-weight: bold; background-color: #e2e8f0; color: #1e293b; }
-          .terms { margin-bottom: 25px; }
+          .terms { margin-bottom: 25px; page-break-inside: avoid; }
           .terms h3 { font-size: 12pt; font-weight: bold; margin-bottom: 15px; color: #334155; }
           table.terms-table { width: 100%; border-collapse: collapse; font-size: 10pt; border: 1px solid #cbd5e1; }
+          .terms-table tr { page-break-inside: avoid; }
           .terms-table th, .terms-table td { border: 1px solid #cbd5e1; padding: 10px; vertical-align: top; text-align: left; }
           .terms-table th { width: 25%; background-color: #f1f5f9; font-weight: bold; color: #475569; }
           .terms-table td { width: 75%; color: #1e293b; }
-          .closing { margin-bottom: 30px; font-size: 10pt; padding: 0 15px; }
+          .closing { margin-bottom: 30px; font-size: 10pt; padding: 0 15px; page-break-inside: avoid; }
           .footer { text-align: center; border-top: 2px solid #e2e8f0; padding-top: 20px; margin-top: 40px; font-size: 9pt; display: flex; justify-content: center; gap: 30px; color: #64748b; }
           .footer span { display: flex; align-items: center; gap: 8px; }
           .underline-text { border-bottom: 2px solid #334155; display: inline-block; padding-bottom: 4px;}
@@ -604,7 +606,7 @@ export const generatePDFBlob = async (
               <tr><th>Payment</th><td>${escapeHtml(formData.Term_Payment || "")}</td></tr>
               <tr><th>Delivery</th><td>${escapeHtml(formData.Term_Delivery || "")}</td></tr>
               <tr><th>Warranty</th><td>${escapeHtml(formData.Term_Warranty || "").replace(/\n/g, "<br>")}</td></tr>
-              <tr><th>Grand Total</th><td><strong>${totals.grandTotal.toFixed(2)}</strong></td></tr>
+             
             </table>
           </div>
           <div class="closing">
@@ -613,9 +615,9 @@ export const generatePDFBlob = async (
             <p><strong>For Associated Scientific & Engg. Works</strong></p>
           </div>
           <div class="footer">
-            <span><i class="fas fa-phone"></i> 9873711119, 9873811119</span>
-            <span><i class="fas fa-globe"></i> www.asewindia.com</span>
-            <span><i class="fas fa-envelope"></i> sales@asewindia.com</span>
+            <span><strong>Tel:</strong> 9873711119, 9873811119</span>
+            <span><strong>Web:</strong> www.asewindia.com</span>
+            <span><strong>Email:</strong> sales@asewindia.com</span>
           </div>
         </div>
       </body>
