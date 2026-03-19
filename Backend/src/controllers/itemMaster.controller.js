@@ -96,3 +96,44 @@ exports.updateItem = async (req, res) => {
     });
   }
 };
+
+/**
+ * BULK UPDATE ITEMS — single read + single batchUpdate
+ * Expects req.body.items = [{ ITEM_NAME, SPECIFICATIONS, UNIT_PRICE, ... }, ...]
+ */
+exports.bulkUpdateItems = async (req, res) => {
+  try {
+    const { items } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: "items array is required" });
+    }
+
+    const bulkItems = items
+      .filter((item) => item.ITEM_NAME)
+      .map((item) => ({
+        matchValue: item.ITEM_NAME,
+        data: item,
+      }));
+
+    if (bulkItems.length === 0) {
+      return res.status(400).json({ message: "No valid items with ITEM_NAME" });
+    }
+
+    const result = await db.bulkUpdateByColumn(
+      SHEET_NAME,
+      "ITEM_NAME",
+      bulkItems,
+    );
+
+    res.json({
+      message: `${result.updated}/${result.total} items updated`,
+      ...result,
+    });
+  } catch (err) {
+    console.error(`[ItemMaster] Bulk update failed: ${err.message}`);
+    res.status(500).json({
+      message: err.message || "Error bulk updating items",
+    });
+  }
+};

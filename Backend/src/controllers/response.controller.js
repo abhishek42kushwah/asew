@@ -59,17 +59,18 @@ exports.createResponse = async (req, res) => {
       ? data.ITEMS
       : JSON.parse(data.ITEMS || "[]");
 
+    // ✅ Fetch Item_Master ONCE before the loop to avoid N quota reads
+    const allMasterItems = await db.getAll("Item_Master");
+    const normalize = (s) => s?.toString().trim().toLowerCase() || "";
+
     const insertedRows = [];
 
     for (const item of items) {
-      // Auto fetch item master
-      const itemData = await db.find(
-        "Item_Master",
-        "ITEM_NAME",
-        item.item_name,
-      );
-
-      const master = itemData[0] || {};
+      // In-memory lookup — no extra API call per item
+      const master =
+        allMasterItems.find(
+          (m) => normalize(m.ITEM_NAME) === normalize(item.item_name),
+        ) || {};
 
       const unitPrice = item.unit_price || master.UNIT_PRICE || 0;
 

@@ -22,7 +22,7 @@ import {
   fetchCustomers,
   updateCustomerMaster,
 } from "../store/slices/customerSlice";
-import { fetchItems, updateItemMaster } from "../store/slices/itemSlice";
+import { fetchItems, bulkUpdateItemMaster } from "../store/slices/itemSlice";
 import { fetchSaves, createSave } from "../store/slices/saveSlice";
 import { fetchResponses, createResponse } from "../store/slices/responseSlice";
 import CustomerModal from "./CustomerModal";
@@ -569,22 +569,20 @@ const QuotationForm = () => {
         pdfBlob,
         `Quotation_${values.Quotation_No || "New"}.pdf`,
       );
-      // Automatically sync items to Item Master
-      validItems.forEach((item) => {
-        const itemData = {
-          ITEM_NAME: item.item_name,
-          SPECIFICATIONS: item.specifications,
-          UNIT_PRICE: item.unit_price,
-          HSN_CODE: item.hsn,
-          MAKE: item.make,
-          NABL: item.nabl,
-        };
-        dispatch(updateItemMaster({ name: item.item_name, itemData }))
-          .unwrap()
-          .catch((err) =>
-            console.error(`[AutoSync] Failed for "${item.item_name}":`, err),
-          );
-      });
+      // Automatically sync items to Item Master (single bulk call)
+      const itemsToSync = validItems.map((item) => ({
+        ITEM_NAME: item.item_name,
+        SPECIFICATIONS: item.specifications,
+        UNIT_PRICE: item.unit_price,
+        HSN_CODE: item.hsn,
+        MAKE: item.make,
+        NABL: item.nabl,
+      }));
+      dispatch(bulkUpdateItemMaster({ items: itemsToSync }))
+        .unwrap()
+        .catch((err) =>
+          console.error(`[AutoSync] Bulk item update failed:`, err),
+        );
       // Automatically sync customer details to Customer Master
       if (values.Customer_Name) {
         const customerData = {

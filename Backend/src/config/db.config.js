@@ -179,6 +179,64 @@ const updateById = async (sheetName, id, updatedData, idColumn = null) => {
   return true;
 };
 
+/**
+ * ✅ BULK UPDATE BY COLUMN — single read + single batchUpdate
+ * items: array of { matchValue, data } where matchValue is the value to match in matchColumn
+ */
+const bulkUpdateByColumn = async (sheetName, matchColumn, items) => {
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!A:ZZ`,
+  });
+
+  const rows = res.data.values;
+  if (!rows || rows.length === 0) throw new Error("Sheet empty");
+
+  const rawHeaders = rows[0];
+
+  // Find column index for matching
+  const norm = (s) => s?.toString().toLowerCase().replace(/[\s_-]/g, "") || "";
+  const normalizedMatchCol = norm(matchColumn);
+  let matchColIndex = rawHeaders.findIndex((h) => norm(h) === normalizedMatchCol);
+  if (matchColIndex === -1) matchColIndex = 0;
+
+  // Build lookup of items to update
+  const updateMap = new Map();
+  items.forEach((item) => {
+    updateMap.set(String(item.matchValue).trim(), item.data);
+  });
+
+  // Find all matching rows and build batch data
+  const batchData = [];
+  for (let i = 1; i < rows.length; i++) {
+    const cellValue = String(rows[i][matchColIndex] || "").trim();
+    if (updateMap.has(cellValue)) {
+      const updatedData = updateMap.get(cellValue);
+      const updatedRow = rawHeaders.map((header, colIndex) => {
+        return updatedData[header] !== undefined
+          ? updatedData[header]
+          : rows[i][colIndex] || "";
+      });
+      batchData.push({
+        range: `${sheetName}!A${i + 1}`,
+        values: [updatedRow],
+      });
+    }
+  }
+
+  if (batchData.length > 0) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody: {
+        valueInputOption: "USER_ENTERED",
+        data: batchData,
+      },
+    });
+  }
+
+  return { updated: batchData.length, total: items.length };
+};
+
 module.exports = {
   insertByHeader,
   getAll,
@@ -187,4 +245,5 @@ module.exports = {
   findById,
   clearSheet,
   insertMultipleByHeader,
+  bulkUpdateByColumn,
 };

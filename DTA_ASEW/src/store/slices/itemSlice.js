@@ -54,6 +54,24 @@ export const updateItemMaster = createAsyncThunk(
   },
 );
 
+export const bulkUpdateItemMaster = createAsyncThunk(
+  "item/bulkUpdateItemMaster",
+  async ({ items }, { rejectWithValue }) => {
+    try {
+      const response = await axios.put(`${API_URL}/bulk`, { items }, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to bulk update items",
+      );
+    }
+  },
+);
+
 const itemSlice = createSlice({
   name: "item",
   initialState: {
@@ -107,6 +125,12 @@ const itemSlice = createSlice({
       })
       .addCase(updateItemMaster.rejected, (state, action) => {
         state.isLoading = false;
+        state.error = action.payload;
+      })
+      .addCase(bulkUpdateItemMaster.fulfilled, () => {
+        // Bulk update succeeded — no individual item tracking needed
+      })
+      .addCase(bulkUpdateItemMaster.rejected, (state, action) => {
         state.error = action.payload;
       });
   },

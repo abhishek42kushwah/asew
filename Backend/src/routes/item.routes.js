@@ -7,5 +7,6 @@ router.post("/", itemController.createItem);
 
 router.get("/", itemController.getItems);
 router.put("/", itemController.updateItem);
+router.put("/bulk", itemController.bulkUpdateItems);
 
 module.exports = router;

@@ -27,78 +27,91 @@ const drive = google.drive({ version: 'v3', auth: oauth2Client });
  * Uploads a file to Google Drive using OAuth 2.0
  */
 const uploadToDrive = async (fileBuffer, filename, mimeType) => {
-    try {
-        console.log('📤 Uploading file to Google Drive via OAuth...');
-        console.log('File:', filename, 'Size:', fileBuffer.length, 'bytes');
+    const MAX_RETRIES = 3;
 
-        // Ensure we have a valid folder ID
-        const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
-        if (!folderId) {
-            throw new Error('GOOGLE_DRIVE_FOLDER_ID is not set in .env');
-        }
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            console.log(`📤 Uploading file to Google Drive via OAuth... (attempt ${attempt}/${MAX_RETRIES})`);
+            console.log('File:', filename, 'Size:', fileBuffer.length, 'bytes');
 
-        // Create file metadata
-        const fileMetadata = {
-            name: `${Date.now()}_${filename}`,
-            parents: [folderId]
-        };
-
-        // Create media
-        const media = {
-            mimeType: mimeType,
-            body: require('stream').Readable.from(fileBuffer)
-        };
-
-        console.log('Target folder ID:', folderId);
-
-        // Upload file
-        const response = await drive.files.create({
-            resource: fileMetadata,
-            media: media,
-            fields: 'id, name, webViewLink, webContentLink',
-        });
-
-        console.log('✅ File uploaded successfully!');
-        console.log('File ID:', response.data.id);
-        console.log('File Name:', response.data.name);
-
-        // Set public permissions
-        await drive.permissions.create({
-            fileId: response.data.id,
-            requestBody: {
-                role: 'reader',
-                type: 'anyone',
-            },
-            fields: 'id',
-        });
-
-        console.log('✅ Public permissions set');
-
-        // Return direct download link for audio files to ensure playback
-        if (mimeType.startsWith('audio/')) {
-            // Use constructed URL for max reliability with <audio> tags
-            return `https://drive.google.com/uc?export=download&id=${response.data.id}`;
-        }
-
-        return response.data.webViewLink || response.data.webContentLink;
-
-    } catch (error) {
-        console.error('❌ OAuth Drive Upload Error:');
-
-        // Detailed error logging
-        if (error.response) {
-            console.error('Status:', error.response.status);
-            console.error('Data:', JSON.stringify(error.response.data, null, 2));
-
-            // Handle token expiration
-            if (error.response.status === 401) {
-                console.error('Token may be expired. Try refreshing or regenerating tokens.');
+            // Ensure we have a valid folder ID
+            const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+            if (!folderId) {
+                throw new Error('GOOGLE_DRIVE_FOLDER_ID is not set in .env');
             }
-        } else {
-            console.error('Message:', error.message);
-        }
 
-        throw new Error(`Google Drive Upload Failed: ${error.message}`);
+            // Create file metadata
+            const fileMetadata = {
+                name: `${Date.now()}_${filename}`,
+                parents: [folderId]
+            };
+
+            // Create media (must recreate stream on each retry)
+            const media = {
+                mimeType: mimeType,
+                body: require('stream').Readable.from(fileBuffer)
+            };
+
+            console.log('Target folder ID:', folderId);
+
+            // Upload file
+            const response = await drive.files.create({
+                resource: fileMetadata,
+                media: media,
+                fields: 'id, name, webViewLink, webContentLink',
+            });
+
+            console.log('✅ File uploaded successfully!');
+            console.log('File ID:', response.data.id);
+            console.log('File Name:', response.data.name);
+
+            // Set public permissions
+            await drive.permissions.create({
+                fileId: response.data.id,
+                requestBody: {
+                    role: 'reader',
+                    type: 'anyone',
+                },
+                fields: 'id',
+            });
+
+            console.log('✅ Public permissions set');
+
+            // Return direct download link for audio files to ensure playback
+            if (mimeType.startsWith('audio/')) {
+                return `https://drive.google.com/uc?export=download&id=${response.data.id}`;
+            }
+
+            return response.data.webViewLink || response.data.webContentLink;
+
+        } catch (error) {
+            const isRetryable = !error.response && (
+                error.message.includes('ECONNRESET') ||
+                error.message.includes('ETIMEDOUT') ||
+                error.message.includes('ENOTFOUND') ||
+                error.message.includes('socket hang up')
+            );
+
+            if (isRetryable && attempt < MAX_RETRIES) {
+                const delay = Math.pow(2, attempt) * 1000; // 2s, 4s
+                console.warn(`⚠️ Upload attempt ${attempt} failed (${error.message}). Retrying in ${delay / 1000}s...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue;
+            }
+
+            console.error('❌ OAuth Drive Upload Error:');
+            if (error.response) {
+                console.error('Status:', error.response.status);
+                console.error('Data:', JSON.stringify(error.response.data, null, 2));
+                if (error.response.status === 401) {
+                    console.error('Token may be expired. Try refreshing or regenerating tokens.');
+                }
+            } else {
+                console.error('Message:', error.message);
+            }
+
+            throw new Error(`Google Drive Upload Failed: ${error.message}`);
+        }
     }
 };
 
