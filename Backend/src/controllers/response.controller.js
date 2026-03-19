@@ -11,76 +11,86 @@ exports.createResponse = async (req, res) => {
   try {
     const data = req.body;
 
-    let Image_URL = "";
-    let Generated_PDF = "";
+    // 1. Parallelize Drive Uploads + Item_Master fetch + Quotation No lookup
+    const uploadPromises = [];
 
-    // Upload Image (Single)
     if (req.files?.Image_URL?.[0]) {
       const file = req.files.Image_URL[0];
-      Image_URL = await uploadToDrive(
-        file.buffer,
-        file.originalname,
-        file.mimetype,
+      uploadPromises.push(
+        uploadToDrive(file.buffer, file.originalname, file.mimetype).then((url) => ({
+          type: "image", url,
+        })),
       );
     }
 
-    // Upload PDF (Single)
     if (req.files?.Generated_PDF?.[0]) {
       const file = req.files.Generated_PDF[0];
-      Generated_PDF = await uploadToDrive(
-        file.buffer,
-        file.originalname,
-        file.mimetype,
+      uploadPromises.push(
+        uploadToDrive(file.buffer, file.originalname, file.mimetype).then((url) => ({
+          type: "pdf", url,
+        })),
       );
     }
 
-    // Generate response sequence number (following save pattern)
-    let quotationNo = data.Quotation_No;
+    const masterDataPromise = db.getAll("Item_Master");
+    const existingRowsPromise = data.Quotation_No
+      ? Promise.resolve([])
+      : db.getAll(SHEET_NAME);
 
+    const [uploadResults, allMasterItems, allRows] = await Promise.all([
+      Promise.all(uploadPromises),
+      masterDataPromise,
+      existingRowsPromise,
+    ]);
+
+    const Generated_PDF = uploadResults.find((r) => r.type === "pdf")?.url || "";
+    // Map uploaded images by their original order (following the convention in save.controller.js)
+    const uploadedImages = uploadResults.filter((r) => r.type === "image");
+    const imageMap = new Map(uploadedImages.map((r, index) => [index, r.url]));
+
+    // 2. Generate quotation number
+    let quotationNo = data.Quotation_No;
     if (!quotationNo) {
-      const allRows = await db.getAll(SHEET_NAME);
       let maxSeq = 0;
       allRows.forEach((r) => {
         const no = r.Quotation_No;
         if (no) {
           const parts = no.split("/");
           const seq = parseInt(parts[parts.length - 1]);
-          if (!isNaN(seq) && seq > maxSeq) {
-            maxSeq = seq;
-          }
+          if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
         }
       });
-      const nextNumber = maxSeq + 1;
-      quotationNo = `2025-26/RS/${String(nextNumber).padStart(4, "0")}`; // Using RS for Response
+      quotationNo = `2025-26/RS/${String(maxSeq + 1).padStart(4, "0")}`;
     }
 
-    // Items
+    // 3. Build all rows in memory (O(1) master lookup)
+    const normalize = (s) => s?.toString().trim().toLowerCase() || "";
+    const masterMap = new Map();
+    allMasterItems.forEach((m) => {
+      if (m.ITEM_NAME) masterMap.set(normalize(m.ITEM_NAME), m);
+    });
+
     const items = Array.isArray(data.ITEMS)
       ? data.ITEMS
       : JSON.parse(data.ITEMS || "[]");
 
-    // ✅ Fetch Item_Master ONCE before the loop to avoid N quota reads
-    const allMasterItems = await db.getAll("Item_Master");
-    const normalize = (s) => s?.toString().trim().toLowerCase() || "";
-
-    const insertedRows = [];
-
-    for (const item of items) {
-      // In-memory lookup — no extra API call per item
-      const master =
-        allMasterItems.find(
-          (m) => normalize(m.ITEM_NAME) === normalize(item.item_name),
-        ) || {};
-
+    let imageCounter = 0;
+    const rowsToInsert = items.map((item, idx) => {
+      const master = masterMap.get(normalize(item.item_name)) || {};
       const unitPrice = item.unit_price || master.UNIT_PRICE || 0;
-
       const hsn = master.HSN_CODE || item.hsn_code || item.hsn || "";
-
       const make = master.MAKE || item.make || "";
-
       const totalPrice = unitPrice * item.qty;
+      const isLastItem = idx === items.length - 1;
 
-      const rowData = {
+      // Match item image based on order
+      let currentItemImage = "";
+      if (item.image) {
+        currentItemImage = imageMap.get(imageCounter) || "";
+        imageCounter++;
+      }
+
+      return {
         Date: data.Date,
         Quotation_No: quotationNo,
         Customer_Name: data.Customer_Name,
@@ -90,63 +100,46 @@ exports.createResponse = async (req, res) => {
         Contact_Person: data.Contact_Person,
         Contact_Mobile: data.Contact_Mobile,
         Email_Address: data.Email_Address,
-
         SPECIFICATIONS: item.specifications,
         Qty: item.qty,
         Unit_Price: unitPrice,
         Total_Price: totalPrice,
-
         Subtotal: data.Subtotal,
-
-        Image_URL: Image_URL,
-
+        Image_URL: currentItemImage,
         Discount: data.Discount,
         GST: data.GST,
         Freight_Charges: data.Freight_Charges,
         Packaging_Charges: data.Packaging_Charges,
         Total_Amount: data.Total_Amount,
-
-        Generated_PDF: Generated_PDF,
-
-        ITEMS: item.item_name, // Store individual item name here
-
+        Generated_PDF: isLastItem ? Generated_PDF : "",
+        ITEMS: item.item_name,
         Freight_Note: data.Freight_Note,
         Packaging_Note: data.Packaging_Note,
-
         Term_Tax: data.Term_Tax || "Extra, GST @ 18%",
-
         Term_Delivery:
           data.Term_Delivery ||
           "1-2 weeks after receipt of your Purchase Order.",
-
         Term_Warranty:
           data.Term_Warranty ||
           "12 months standard warranty against manufacturing defects.",
-
         Delivery_Address: data.Delivery_Address,
-
         HSN_Code: hsn,
         Make: make,
-
         Item_Discount: item.discount || 0,
-
         Term_Payment:
           data.Term_Payment || "30% advance & balance at the time of dispatch",
-
         NABL: item.nabl || data.NABL || "",
       };
+    });
 
-      await db.insertByHeader(SHEET_NAME, rowData);
-
-      insertedRows.push(rowData);
-    }
+    // 4. Batch insert all rows at once (1 API call instead of N)
+    await db.insertMultipleByHeader(SHEET_NAME, rowsToInsert);
 
     res.status(201).json({
       success: true,
       quotation_no: quotationNo,
       message: "Response created successfully",
-      total_items: insertedRows.length,
-      data: insertedRows,
+      total_items: rowsToInsert.length,
     });
   } catch (error) {
     console.error(error);
@@ -188,6 +181,14 @@ exports.getAllResponse = async (req, res) => {
           header: r,
           items: [],
         };
+      }
+
+      // Pick up Generated_PDF/Image_URL from whichever row has them (stored on last row)
+      if (r.Generated_PDF && !grouped[r.Quotation_No].header.Generated_PDF) {
+        grouped[r.Quotation_No].header.Generated_PDF = r.Generated_PDF;
+      }
+      if (r.Image_URL && !grouped[r.Quotation_No].header.Image_URL) {
+        grouped[r.Quotation_No].header.Image_URL = r.Image_URL;
       }
 
       // Backward compatibility for old records where ITEMS stored the full JSON array

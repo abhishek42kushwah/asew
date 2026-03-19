@@ -42,7 +42,7 @@ const uploadToDrive = async (fileBuffer, filename, mimeType) => {
 
             // Create file metadata
             const fileMetadata = {
-                name: `${Date.now()}_${filename}`,
+                name: filename,
                 parents: [folderId]
             };
 

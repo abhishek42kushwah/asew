@@ -374,20 +374,7 @@ const QuotationForm = () => {
     }
   };
 
-  const cloneEquipment = (index) => {
-    const itemToClone = { ...values.labEquipment[index] };
-    const newItem = {
-      ...itemToClone,
-      id: Date.now(), // Generate a new ID for the clone
-    };
-    
-    setFieldValue("labEquipment", [
-      ...values.labEquipment.slice(0, index + 1),
-      newItem,
-      ...values.labEquipment.slice(index + 1),
-    ]);
-    toast.success("Row cloned successfully");
-  };
+ 
 
   const calculateSubtotal = () => {
     return values.labEquipment.reduce((sum, item) => sum + item.total_price, 0);
@@ -539,7 +526,11 @@ const QuotationForm = () => {
       }
     });
 
-    data.append("ITEMS", JSON.stringify(validItems));
+    const itemsForJSON = validItems.map(item => ({
+      ...item,
+      image: !!item.image  // Convert File object to boolean flag for serialization
+    }));
+    data.append("ITEMS", JSON.stringify(itemsForJSON));
     data.append("Subtotal", calculateSubtotal());
     data.append("Total_Amount", calculateGrandTotal());
 
@@ -563,11 +554,15 @@ const QuotationForm = () => {
         showFields,
         totals,
       );
+      const sanitizedQuotationNo = (values.Quotation_No || "New").replace(/\//g, "_");
+      const sanitizedCustomerName = (values.Customer_Name || "Customer").replace(/[^a-zA-Z0-9]/g, "_");
+      const pdfFilename = `${sanitizedCustomerName}_${sanitizedQuotationNo}.pdf`;
+
       // Append PDF File for the API to upload to Drive
       data.append(
         "Generated_PDF",
         pdfBlob,
-        `Quotation_${values.Quotation_No || "New"}.pdf`,
+        pdfFilename,
       );
       // Automatically sync items to Item Master (single bulk call)
       const itemsToSync = validItems.map((item) => ({
@@ -1213,14 +1208,7 @@ const QuotationForm = () => {
                     </td>
                     <td className="p-2 border border-gray-200 text-center">
                       <div className="flex items-center justify-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => cloneEquipment(index)}
-                          title="Clone Row"
-                          className="bg-[#f39c12] text-white p-2 rounded hover:bg-[#e67e22] transition-colors"
-                        >
-                          <FaCopy size={12} />
-                        </button>
+                       
                         <button
                           type="button"
                           onClick={() => removeEquipment(index)}

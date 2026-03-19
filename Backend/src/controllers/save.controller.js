@@ -90,21 +90,19 @@ exports.createSave = async (req, res) => {
     // Tracking how many items with images we've encountered to match with uploaded files
     let imageCounter = 0;
 
-    const rowsToInsert = items.map((item) => {
+    const rowsToInsert = items.map((item, idx) => {
       const master = masterMap.get(item.item_name?.toString().trim()) || {};
       const unitPrice = item.unit_price || master.UNIT_PRICE || 0;
       const hsn = master.HSN_CODE || item.hsn_code || item.hsn || "";
       const make = master.MAKE || item.make || "";
       const totalPrice = unitPrice * item.qty;
+      const isLastItem = idx === items.length - 1;
 
       // Match item image with uploaded URL based on order
       let currentItemImage = "";
       if (item.image) {
         currentItemImage = imageMap.get(imageCounter) || "";
         imageCounter++;
-      } else if (uploadedImages.length === 1 && items.length > 1) {
-        // Fallback: if only one global image uploaded, apply to all (legacy)
-        currentItemImage = uploadedImages[0].url;
       }
 
       return {
@@ -128,8 +126,8 @@ exports.createSave = async (req, res) => {
         Freight_Charges: data.Freight_Charges,
         Packaging_Charges: data.Packaging_Charges,
         Total_Amount: data.Total_Amount,
-        Generated_PDF: Generated_PDF,
-        ITEMS: item.item_name, // Store individual item name here
+        Generated_PDF: isLastItem ? Generated_PDF : "",
+        ITEMS: item.item_name,
         Freight_Note: data.Freight_Note,
         Packaging_Note: data.Packaging_Note,
         Term_Tax: data.Term_Tax || "Extra, GST @ 18%",
@@ -198,6 +196,14 @@ exports.getAllSave = async (req, res) => {
           header: r,
           items: [],
         };
+      }
+
+      // Pick up Generated_PDF/Image_URL from whichever row has them (stored on last row)
+      if (r.Generated_PDF && !grouped[r.Quotation_No].header.Generated_PDF) {
+        grouped[r.Quotation_No].header.Generated_PDF = r.Generated_PDF;
+      }
+      if (r.Image_URL && !grouped[r.Quotation_No].header.Image_URL) {
+        grouped[r.Quotation_No].header.Image_URL = r.Image_URL;
       }
 
       // Backward compatibility for old records where ITEMS stored the full JSON array
