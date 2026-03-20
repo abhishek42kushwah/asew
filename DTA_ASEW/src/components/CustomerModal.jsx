@@ -37,14 +37,14 @@ const CustomerModal = ({ isOpen, onClose, onSuccess }) => {
       Delivery_Address: "",
     },
     validationSchema,
-    onSubmit: async (values, { setSubmitting, resetForm }) => {
+    onSubmit: async (values, { setSubmitting }) => {
       try {
         const resultAction = await dispatch(createCustomer(values));
 
         if (createCustomer.fulfilled.match(resultAction)) {
           toast.success("Customer created successfully!");
           onSuccess(values.Customer_Name);
-          resetForm();
+          setTimeout(() => window.location.reload(), 1500);
           onClose();
         } else {
           toast.error(resultAction.payload || "Failed to create customer");

@@ -237,6 +237,73 @@ const bulkUpdateByColumn = async (sheetName, matchColumn, items) => {
   return { updated: batchData.length, total: items.length };
 };
 
+/**
+ * ✅ DELETE ROWS BY COLUMN
+ */
+const deleteRowsByColumn = async (sheetName, columnName, value) => {
+  const spreadsheetRes = await sheets.spreadsheets.get({
+    spreadsheetId: SPREADSHEET_ID,
+  });
+
+  const sheet = spreadsheetRes.data.sheets.find(
+    (s) => s.properties.title === sheetName,
+  );
+  if (!sheet) throw new Error(`Sheet "${sheetName}" not found`);
+
+  const sheetId = sheet.properties.sheetId;
+
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!A:ZZ`,
+  });
+
+  const rows = res.data.values;
+  if (!rows || rows.length === 0) return 0;
+
+  const rawHeaders = rows[0];
+  const norm = (s) => s?.toString().toLowerCase().replace(/[\s_-]/g, "") || "";
+  const normalizedMatchCol = norm(columnName);
+  let matchColIndex = rawHeaders.findIndex(
+    (h) => norm(h) === normalizedMatchCol,
+  );
+  if (matchColIndex === -1) matchColIndex = 0;
+
+  const targetValue = String(value).trim();
+  const indicesToDelete = [];
+
+  for (let i = 1; i < rows.length; i++) {
+    const cellValue = String(rows[i][matchColIndex] || "").trim();
+    if (cellValue === targetValue) {
+      indicesToDelete.push(i); // 0-based index
+    }
+  }
+
+  if (indicesToDelete.length === 0) return 0;
+
+  // IMPORTANT: Delete in reverse order to keep indices valid
+  const requests = indicesToDelete
+    .sort((a, b) => b - a)
+    .map((index) => ({
+      deleteDimension: {
+        range: {
+          sheetId: sheetId,
+          dimension: "ROWS",
+          startIndex: index,
+          endIndex: index + 1,
+        },
+      },
+    }));
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      requests: requests,
+    },
+  });
+
+  return indicesToDelete.length;
+};
+
 module.exports = {
   insertByHeader,
   getAll,
@@ -246,4 +313,5 @@ module.exports = {
   clearSheet,
   insertMultipleByHeader,
   bulkUpdateByColumn,
+  deleteRowsByColumn,
 };

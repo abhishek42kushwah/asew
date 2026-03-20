@@ -58,7 +58,9 @@ exports.createSave = async (req, res) => {
 
     // 3. Optimized Quotation No generation (Max + 1 logic)
     let quotationNo = data.Quotation_No;
-    if (!quotationNo) {
+    const isUpdate = !!quotationNo;
+
+    if (!isUpdate) {
       let maxSeq = 0;
       allRows.forEach((r) => {
         const no = r.Quotation_No;
@@ -72,6 +74,9 @@ exports.createSave = async (req, res) => {
       });
       const nextNumber = maxSeq + 1;
       quotationNo = `2025-26/QT/${String(nextNumber).padStart(4, "0")}`;
+    } else {
+      // If it's an update, delete existing rows for this quotation first
+      await db.deleteRowsByColumn(SHEET_NAME, "Quotation_No", quotationNo);
     }
 
     // 4. Map Item Master for O(1) lookups
