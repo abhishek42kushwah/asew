@@ -541,6 +541,9 @@ const QuotationForm = () => {
       }
     });
 
+    // Send the column visibility settings to the backend
+    data.append("showFields", JSON.stringify(showFields));
+
     const loadingToastId = toast.loading("Processing quotation...");
 
     try {
@@ -564,6 +567,7 @@ const QuotationForm = () => {
         pdfBlob,
         pdfFilename,
       );
+      /* 
       // Automatically sync items to Item Master (single bulk call)
       const itemsToSync = validItems.map((item) => ({
         ITEM_NAME: item.item_name,
@@ -578,6 +582,7 @@ const QuotationForm = () => {
         .catch((err) =>
           console.error(`[AutoSync] Bulk item update failed:`, err),
         );
+      */
       // Automatically sync customer details to Customer Master
       if (values.Customer_Name) {
         const customerData = {

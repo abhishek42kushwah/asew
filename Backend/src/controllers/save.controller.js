@@ -95,11 +95,21 @@ exports.createSave = async (req, res) => {
     // Tracking how many items with images we've encountered to match with uploaded files
     let imageCounter = 0;
 
+    // Parse column visibility settings from the frontend
+    const showFields = typeof data.showFields === 'string' 
+      ? JSON.parse(data.showFields) 
+      : (data.showFields || { hsn: true, nabl: true, make: true, discount: true });
+
     const rowsToInsert = items.map((item, idx) => {
       const master = masterMap.get(item.item_name?.toString().trim()) || {};
       const unitPrice = item.unit_price || master.UNIT_PRICE || 0;
-      const hsn = master.HSN_CODE || item.hsn_code || item.hsn || "";
-      const make = master.MAKE || item.make || "";
+      
+      // Determine values based on column visibility (showFields)
+      const hsn = showFields.hsn ? (master.HSN_CODE || item.hsn_code || item.hsn || "") : "";
+      const make = showFields.make ? (master.MAKE || item.make || "") : "";
+      const nabl = showFields.nabl ? (item.nabl || data.NABL || master.NABL || "") : "";
+      const itemDiscount = showFields.discount ? (item.discount || item.discount_percent || 0) : 0;
+
       const totalPrice = unitPrice * item.qty;
       const isLastItem = idx === items.length - 1;
 
@@ -145,10 +155,10 @@ exports.createSave = async (req, res) => {
         Delivery_Address: data.Delivery_Address,
         HSN_Code: hsn,
         Make: make,
-        Item_Discount: item.discount || 0,
+        Item_Discount: itemDiscount,
         Term_Payment:
           data.Term_Payment || "30% advance & balance at the time of dispatch",
-        NABL: item.nabl || data.NABL || "",
+        NABL: nabl,
       };
     });
 
