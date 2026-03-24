@@ -22,13 +22,13 @@ import {
   fetchCustomers,
   updateCustomerMaster,
 } from "../store/slices/customerSlice";
-import { fetchItems, bulkUpdateItemMaster } from "../store/slices/itemSlice";
+import { fetchItems } from "../store/slices/itemSlice";
 import { fetchSaves, createSave } from "../store/slices/saveSlice";
 import { fetchResponses, createResponse } from "../store/slices/responseSlice";
 import CustomerModal from "./CustomerModal";
 import Select from "react-select";
 import toast from "react-hot-toast";
-import { useFormik, FieldArray, FormikProvider } from "formik";
+import { useFormik,  FormikProvider } from "formik";
 import * as Yup from "yup";
 import { generateQuotationPDF, generatePDFBlob } from "../utils/pdfGenerator";
 

@@ -246,7 +246,7 @@ const deleteRowsByColumn = async (sheetName, columnName, value) => {
   });
 
   const sheet = spreadsheetRes.data.sheets.find(
-    (s) => s.properties.title === sheetName,
+    (s) => s.properties.title.toLowerCase().trim() === sheetName.toLowerCase().trim(),
   );
   if (!sheet) throw new Error(`Sheet "${sheetName}" not found`);
 

@@ -61,6 +61,9 @@ exports.createResponse = async (req, res) => {
         }
       });
       quotationNo = `2025-26/RS/${String(maxSeq + 1).padStart(4, "0")}`;
+    } else {
+      // If it's an update, delete existing rows for this quotation first
+      await db.deleteRowsByColumn(SHEET_NAME, "Quotation_No", quotationNo);
     }
 
     // 3. Build all rows in memory (O(1) master lookup)
