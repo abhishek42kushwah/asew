@@ -183,16 +183,17 @@ export const generateQuotationPDF = (
      
       <style>
         @media print { 
+          @page { size: auto; margin: 0mm; }
           body { -webkit-print-color-adjust: exact !important; margin: 0; } 
           .container { width: 100%; margin: 0; padding: 10mm; }
         }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 10pt; color: #333; margin: 20px; line-height: 1.4; }
         .container { width: 95%; margin: auto; }
         .header { display: flex; align-items: center; border-bottom: 3px solid #000000; padding: 20px; margin-bottom: 25px; background-color: #ADD8E6; }
-        .logo-container { width: 160px; height: 100px; display: flex; align-items: center; justify-content: center; background: white; border-radius: 6px; padding: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-right: 25px; }
+        .logo-container { width: 240px; height: 150px; display: flex; align-items: center; justify-content: center; background: white; border-radius: 6px; padding: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-right: 25px; }
         .logo { max-width: 100%; max-height: 100%; object-fit: contain; }
         .company-info { flex-grow: 1; text-align: left; }
-        .company-info h3 { margin: 0 0 5px 0; font-size: 16pt; font-weight: 800; text-transform: uppercase; color: #dc2626; letter-spacing: 0.5px; }
+        .company-info h3 { margin: 0 0 5px 0; font-size: 16pt; font-weight: 800; text-transform: uppercase; color: #dc2626; letter-spacing: 0.5px; white-space: nowrap; }
         .company-info p { margin: 2px 0; font-size: 11pt; color: #475569; font-weight: 500; }
         .details { display: flex; justify-content: space-between; margin-bottom: 25px; padding: 15px; background-color: #f1f5f9; border-radius: 8px; }
         .details-left, .details-right { width: 48%; }
@@ -502,16 +503,17 @@ export const generatePDFBlob = async (
       
         <style>
           @media print { 
+            @page { size: auto; margin: 0mm; }
             body { -webkit-print-color-adjust: exact !important; margin: 0; } 
             .container { width: 100%; margin: 0; padding: 10mm; }
           }
           body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; font-size: 10pt; color: #333; margin: 20px; line-height: 1.4; }
           .container { width: 95%; margin: auto; }
           .header { display: flex; align-items: center; border-bottom: 3px solid #000000; padding: 20px; margin-bottom: 25px; background-color: #ADD8E6; }
-          .logo-container { width: 160px; height: 100px; display: flex; align-items: center; justify-content: center; background: white; border-radius: 6px; padding: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-right: 25px; }
+          .logo-container { width: 240px; height: 150px; display: flex; align-items: center; justify-content: center; background: white; border-radius: 6px; padding: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-right: 25px; }
           .logo { max-width: 100%; max-height: 100%; object-fit: contain; }
           .company-info { flex-grow: 1; text-align: left; }
-          .company-info h3 { margin: 0 0 5px 0; font-size: 16pt; font-weight: 800; text-transform: uppercase; color: #dc2626; letter-spacing: 0.5px; }
+          .company-info h3 { margin: 0 0 5px 0; font-size: 16pt; font-weight: 800; text-transform: uppercase; color: #dc2626; letter-spacing: 0.5px; white-space: nowrap; }
           .company-info p { margin: 2px 0; font-size: 11pt; color: #475569; font-weight: 500; }
           .details { display: flex; justify-content: space-between; margin-bottom: 25px; padding: 15px; background-color: #f1f5f9; border-radius: 8px; }
           .details-left, .details-right { width: 48%; }

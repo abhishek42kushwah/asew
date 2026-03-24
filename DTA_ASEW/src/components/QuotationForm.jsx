@@ -1,4 +1,4 @@
-import  { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   FaFileAlt,
@@ -28,7 +28,7 @@ import { fetchResponses, createResponse } from "../store/slices/responseSlice";
 import CustomerModal from "./CustomerModal";
 import Select from "react-select";
 import toast from "react-hot-toast";
-import { useFormik,  FormikProvider } from "formik";
+import { useFormik, FormikProvider } from "formik";
 import * as Yup from "yup";
 import { generateQuotationPDF, generatePDFBlob } from "../utils/pdfGenerator";
 
@@ -53,7 +53,9 @@ const QuotationForm = () => {
   const { customers } = useSelector((state) => state.customer);
   const { items: masterItems } = useSelector((state) => state.item);
   const { saves, isLoading: saveLoading } = useSelector((state) => state.save);
-  const { responses, isLoading: responseLoading } = useSelector((state) => state.response);
+  const { responses, isLoading: responseLoading } = useSelector(
+    (state) => state.response,
+  );
 
   const formik = useFormik({
     initialValues: {
@@ -113,7 +115,7 @@ const QuotationForm = () => {
   const itemOptions = masterItems.map((mi) => ({
     value: mi.ITEM_CODE || mi.ITEM_NAME || "", // Use ITEM_CODE if available
     label: mi.ITEM_NAME ? mi.ITEM_NAME.trim() : "",
-    itemName: mi.ITEM_NAME || ""
+    itemName: mi.ITEM_NAME || "",
   }));
 
   const customSelectStyles = {
@@ -192,7 +194,12 @@ const QuotationForm = () => {
           labEquipment: items.map((item, idx) => ({
             id: Date.now() + idx,
             // Backend stores as Item_Name (PascalCase); also cover camelCase & UPPERCASE
-            item_name: (item.item_name || item.Item_Name || item.ITEM_NAME || "").trim(),
+            item_name: (
+              item.item_name ||
+              item.Item_Name ||
+              item.ITEM_NAME ||
+              ""
+            ).trim(),
             specifications: item.specifications || item.SPECIFICATIONS || "",
             qty: Number(item.qty || item.Qty || item.QTY || 1),
             unit_price: Number(
@@ -259,7 +266,11 @@ const QuotationForm = () => {
 
   useEffect(() => {
     const isDataLoaded = !saveLoading && !responseLoading;
-    if (isDataLoaded && (saves.length > 0 || responses.length > 0) && !values.Quotation_No) {
+    if (
+      isDataLoaded &&
+      (saves.length > 0 || responses.length > 0) &&
+      !values.Quotation_No
+    ) {
       const allNos = [
         ...saves.map((s) => s.header?.Quotation_No || s.Quotation_No),
         ...responses.map((r) => r.header?.Quotation_No || r.Quotation_No),
@@ -289,7 +300,14 @@ const QuotationForm = () => {
 
       setFieldValue("Quotation_No", quotationNo);
     }
-  }, [saves, responses, saveLoading, responseLoading, values.Quotation_No, setFieldValue]);
+  }, [
+    saves,
+    responses,
+    saveLoading,
+    responseLoading,
+    values.Quotation_No,
+    setFieldValue,
+  ]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -318,8 +336,9 @@ const QuotationForm = () => {
     updated[index][field] = value;
 
     if (field === "item_name") {
-      const selectedItem = masterItems.find((item) => 
-        (item.ITEM_CODE === value) || (item.ITEM_NAME?.trim() === value?.trim())
+      const selectedItem = masterItems.find(
+        (item) =>
+          item.ITEM_CODE === value || item.ITEM_NAME?.trim() === value?.trim(),
       );
       if (selectedItem) {
         updated[index].item_name = selectedItem.ITEM_NAME || value;
@@ -373,8 +392,6 @@ const QuotationForm = () => {
       );
     }
   };
-
- 
 
   const calculateSubtotal = () => {
     return values.labEquipment.reduce((sum, item) => sum + item.total_price, 0);
@@ -452,7 +469,12 @@ const QuotationForm = () => {
           Term_Warranty: header.Term_Warranty || prev.Term_Warranty,
           labEquipment: items.map((item, idx) => ({
             id: Date.now() + idx,
-            item_name: (item.item_name || item.Item_Name || item.ITEM_NAME || "").trim(),
+            item_name: (
+              item.item_name ||
+              item.Item_Name ||
+              item.ITEM_NAME ||
+              ""
+            ).trim(),
             specifications: item.specifications || item.SPECIFICATIONS || "",
             qty: Number(item.qty || item.Qty || item.QTY || 1),
             unit_price: Number(item.unit_price || item.Unit_Price || 0),
@@ -526,9 +548,9 @@ const QuotationForm = () => {
       }
     });
 
-    const itemsForJSON = validItems.map(item => ({
+    const itemsForJSON = validItems.map((item) => ({
       ...item,
-      image: !!item.image  // Convert File object to boolean flag for serialization
+      image: !!item.image, // Convert File object to boolean flag for serialization
     }));
     data.append("ITEMS", JSON.stringify(itemsForJSON));
     data.append("Subtotal", calculateSubtotal());
@@ -557,16 +579,17 @@ const QuotationForm = () => {
         showFields,
         totals,
       );
-      const sanitizedQuotationNo = (values.Quotation_No || "New").replace(/\//g, "_");
-      const sanitizedCustomerName = (values.Customer_Name || "Customer").replace(/[^a-zA-Z0-9]/g, "_");
+      const sanitizedQuotationNo = (values.Quotation_No || "New").replace(
+        /\//g,
+        "_",
+      );
+      const sanitizedCustomerName = (
+        values.Customer_Name || "Customer"
+      ).replace(/[^a-zA-Z0-9]/g, "_");
       const pdfFilename = `${sanitizedCustomerName}_${sanitizedQuotationNo}.pdf`;
 
       // Append PDF File for the API to upload to Drive
-      data.append(
-        "Generated_PDF",
-        pdfBlob,
-        pdfFilename,
-      );
+      data.append("Generated_PDF", pdfBlob, pdfFilename);
       /* 
       // Automatically sync items to Item Master (single bulk call)
       const itemsToSync = validItems.map((item) => ({
@@ -1047,7 +1070,9 @@ const QuotationForm = () => {
                         <Select
                           options={itemOptions}
                           value={itemOptions.find(
-                            (opt) => opt.value === item.item_name || opt.itemName === item.item_name
+                            (opt) =>
+                              opt.value === item.item_name ||
+                              opt.itemName === item.item_name,
                           )}
                           onChange={(selected) =>
                             handleEquipmentChange(
@@ -1213,7 +1238,6 @@ const QuotationForm = () => {
                     </td>
                     <td className="p-2 border border-gray-200 text-center">
                       <div className="flex items-center justify-center gap-1">
-                       
                         <button
                           type="button"
                           onClick={() => removeEquipment(index)}
