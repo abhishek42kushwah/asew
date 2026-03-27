@@ -198,11 +198,18 @@ exports.getAllSave = async (req, res) => {
     }
 
     const grouped = {};
+    const uniformItems = {};
 
-    // Pre-pass to count rows per quotation (used for intelligent splitting of old records)
+    // 1st pass: Pre-calculate uniformity and row counts per quotation
     const rowCounts = {};
     filteredRows.forEach(r => {
       rowCounts[r.Quotation_No] = (rowCounts[r.Quotation_No] || 0) + 1;
+      
+      if (uniformItems[r.Quotation_No] === undefined) {
+        uniformItems[r.Quotation_No] = r.ITEMS;
+      } else if (uniformItems[r.Quotation_No] !== r.ITEMS) {
+        uniformItems[r.Quotation_No] = false;
+      }
     });
 
     filteredRows.forEach((r) => {
@@ -256,7 +263,7 @@ exports.getAllSave = async (req, res) => {
         // 1. First check if SPECIFICATIONS contains the exact individual name
         if (resolvedItemName.includes(",") && r.SPECIFICATIONS && resolvedItemName.includes(r.SPECIFICATIONS)) {
           resolvedItemName = r.SPECIFICATIONS;
-        } else if (resolvedItemName.includes(",")) {
+        } else if (resolvedItemName.includes(",") && uniformItems[r.Quotation_No] !== false) {
           // 2. Intelligent fallback: if number of parts matches total row count for this quotation, split by index
           const parts = resolvedItemName.split(",").map(s => s.trim()).filter(Boolean);
           const totalRowsForThisQ = rowCounts[r.Quotation_No] || 0;
