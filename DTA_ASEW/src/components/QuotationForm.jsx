@@ -48,6 +48,50 @@ const validationSchema = Yup.object().shape({
     .min(1, "At least one item required"),
 });
 
+const compressImage = (file, maxWidth = 800, quality = 0.7) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxWidth) {
+          height = (maxWidth / width) * height;
+          width = maxWidth;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const compressedFile = new File([blob], file.name, {
+                type: "image/jpeg",
+                lastModified: Date.now(),
+              });
+              resolve(compressedFile);
+            } else {
+              reject(new Error("Canvas to Blob failed"));
+            }
+          },
+          "image/jpeg",
+          quality,
+        );
+      };
+      img.onerror = (err) => reject(err);
+    };
+    reader.onerror = (err) => reject(err);
+  });
+};
+
 const QuotationForm = () => {
   const dispatch = useDispatch();
   const { customers } = useSelector((state) => state.customer);
@@ -541,34 +585,52 @@ const QuotationForm = () => {
       return;
     }
 
-    const data = new FormData();
-    Object.keys(values).forEach((key) => {
-      if (key !== "labEquipment") {
-        data.append(key, values[key]);
-      }
-    });
-
-    const itemsForJSON = validItems.map((item) => ({
-      ...item,
-      image: !!item.image, // Convert File object to boolean flag for serialization
-    }));
-    data.append("ITEMS", JSON.stringify(itemsForJSON));
-    data.append("Subtotal", calculateSubtotal());
-    data.append("Total_Amount", calculateGrandTotal());
-
-    // Append images only for valid items
-    validItems.forEach((item) => {
-      if (item.image) {
-        data.append("Image_URL", item.image);
-      }
-    });
-
-    // Send the column visibility settings to the backend
-    data.append("showFields", JSON.stringify(showFields));
-
     const loadingToastId = toast.loading("Processing quotation...");
+    const data = new FormData();
 
     try {
+      // 1. Compress all images first to reduce payload size
+      const compressedImages = await Promise.all(
+        validItems.map(async (item) => {
+          if (item.image instanceof File || item.image instanceof Blob) {
+            try {
+              const compressed = await compressImage(item.image);
+              return compressed;
+            } catch (err) {
+              console.error("Image compression failed, using original:", err);
+              return item.image;
+            }
+          }
+          return item.image;
+        }),
+      );
+
+      // 2. Populate FormData
+      Object.keys(values).forEach((key) => {
+        if (key !== "labEquipment") {
+          data.append(key, values[key]);
+        }
+      });
+
+      const itemsForJSON = validItems.map((item, idx) => ({
+        ...item,
+        image: !!compressedImages[idx], // Convert to boolean flag for serialization
+      }));
+      data.append("ITEMS", JSON.stringify(itemsForJSON));
+      data.append("Subtotal", calculateSubtotal());
+      data.append("Total_Amount", calculateGrandTotal());
+
+      // Append COMPRESSED images only for valid items
+      compressedImages.forEach((img) => {
+        if (img) {
+          data.append("Image_URL", img);
+        }
+      });
+
+      // Send the column visibility settings to the backend
+      data.append("showFields", JSON.stringify(showFields));
+
+      // 3. Generate PDF
       const totals = {
         subtotal: calculateSubtotal(),
         grandTotal: calculateGrandTotal(),
@@ -586,26 +648,11 @@ const QuotationForm = () => {
       const sanitizedCustomerName = (
         values.Customer_Name || "Customer"
       ).replace(/[^a-zA-Z0-9]/g, "_");
-      const pdfFilename = `${sanitizedCustomerName}_${sanitizedQuotationNo}.pdf`;
+      const pdfFilename = `${sanitizedCustomerName}__${sanitizedQuotationNo}.pdf`;
 
       // Append PDF File for the API to upload to Drive
       data.append("Generated_PDF", pdfBlob, pdfFilename);
-      /* 
-      // Automatically sync items to Item Master (single bulk call)
-      const itemsToSync = validItems.map((item) => ({
-        ITEM_NAME: item.item_name,
-        SPECIFICATIONS: item.specifications,
-        UNIT_PRICE: item.unit_price,
-        HSN_CODE: item.hsn,
-        MAKE: item.make,
-        NABL: item.nabl,
-      }));
-      dispatch(bulkUpdateItemMaster({ items: itemsToSync }))
-        .unwrap()
-        .catch((err) =>
-          console.error(`[AutoSync] Bulk item update failed:`, err),
-        );
-      */
+
       // Automatically sync customer details to Customer Master
       if (values.Customer_Name) {
         const customerData = {
@@ -629,8 +676,8 @@ const QuotationForm = () => {
           );
       }
     } catch (err) {
-      console.error("PDF generation failed:", err);
-      toast.error("Failed to generate PDF. Proceeding without it.", {
+      console.error("Processing failed:", err);
+      toast.error("Failed to process quotation details. Proceeding without some optimizations.", {
         id: loadingToastId,
       });
     }

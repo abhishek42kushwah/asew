@@ -20,8 +20,8 @@ app.use(
     ],
   }),
 );
-app.use(express.json({ limit: "4mb" }));
-app.use(express.urlencoded({ limit: "4mb", extended: true }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Main Route
 app.get("/", (req, res) => {
