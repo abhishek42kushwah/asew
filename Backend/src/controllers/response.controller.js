@@ -35,7 +35,7 @@ exports.createResponse = async (req, res) => {
     const masterDataPromise = db.getAll("Item_Master");
     const existingRowsPromise = data.Quotation_No
       ? Promise.resolve([])
-      : db.getAll(SHEET_NAME);
+      : db.getTail(SHEET_NAME, 50); // Just get last 50 for max sequence lookup
 
     const [uploadResults, allMasterItems, allRows] = await Promise.all([
       Promise.all(uploadPromises),
@@ -155,14 +155,13 @@ exports.createResponse = async (req, res) => {
 
 exports.getAllResponse = async (req, res) => {
   try {
-    const { quotationNo } = req.query;
+    const { quotationNo, limit = 1500 } = req.query;
 
-    const rows = await db.getAll(SHEET_NAME);
+    const rows = quotationNo 
+      ? await db.find(SHEET_NAME, "Quotation_No", quotationNo) 
+      : await db.getTail(SHEET_NAME, parseInt(limit));
 
-    // FILTER BY QUOTATION (or Response No in this context)
-    const filteredRows = quotationNo
-      ? rows.filter((r) => r.Quotation_No === quotationNo)
-      : rows;
+    const filteredRows = rows;
 
     if (quotationNo && !filteredRows.length) {
       return res.status(404).json({

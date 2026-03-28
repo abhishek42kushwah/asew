@@ -38,11 +38,11 @@ exports.createSave = async (req, res) => {
       );
     }
 
-    // 2. Start fetching Item_Master and Sheet Data in parallel
+    // 2. Start fetching Item_Master and Recent Sheet Data in parallel
     const masterDataPromise = db.getAll("Item_Master");
     const existingSavesPromise = data.Quotation_No
       ? Promise.resolve([])
-      : db.getAll(SHEET_NAME);
+      : db.getTail(SHEET_NAME, 50); // Just get last 50 for max sequence lookup
 
     const [uploadResults, masterData, allRows] = await Promise.all([
       Promise.all(uploadPromises),
@@ -182,14 +182,14 @@ exports.createSave = async (req, res) => {
 
 exports.getAllSave = async (req, res) => {
   try {
-    const { quotationNo } = req.query;
+    const { quotationNo, limit = 1500 } = req.query;
 
-    const rows = await db.getAll(SHEET_NAME);
+    const rows = quotationNo 
+      ? await db.find(SHEET_NAME, "Quotation_No", quotationNo) 
+      : await db.getTail(SHEET_NAME, parseInt(limit));
 
-    // FILTER BY QUOTATION
-    const filteredRows = quotationNo
-      ? rows.filter((r) => r.Quotation_No === quotationNo)
-      : rows;
+    // ROWS ARE ALREADY FILTERED OR LIMITED
+    const filteredRows = rows;
 
     if (quotationNo && !filteredRows.length) {
       return res.status(404).json({

@@ -89,6 +89,44 @@ const getAll = async (sheetName) => {
 };
 
 /**
+ * GET TAIL ROWS (Last N rows)
+ */
+const getTail = async (sheetName, count = 100) => {
+  const allRowsRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!A:A`,
+  });
+
+  const totalRows = allRowsRes.data.values ? allRowsRes.data.values.length : 0;
+  if (totalRows <= 1) return []; // Only header or empty
+
+  const startRow = Math.max(2, totalRows - count + 1);
+  const endRow = totalRows;
+
+  // Fetch headers
+  const headerRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!1:1`,
+  });
+  const headers = headerRes.data.values[0];
+
+  // Fetch tail data
+  const dataRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!A${startRow}:ZZ${endRow}`,
+  });
+
+  const rows = dataRes.data.values || [];
+
+  return rows.map((row) =>
+    headers.reduce((obj, key, i) => {
+      obj[key] = row[i] !== undefined && row[i] !== null ? row[i].toString().trim() : null;
+      return obj;
+    }, {}),
+  );
+};
+
+/**
  * WHERE column = value
  */
 const find = async (sheetName, column, value) => {
@@ -314,4 +352,5 @@ module.exports = {
   insertMultipleByHeader,
   bulkUpdateByColumn,
   deleteRowsByColumn,
+  getTail,
 };

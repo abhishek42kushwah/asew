@@ -18,11 +18,13 @@ exports.createItem = async (req, res) => {
       NABL,
     } = req.body;
 
-    // Get all items
-    const items = await db.getAll(SHEET_NAME);
+    // Get last item for code generation index
+    const lastItems = await db.getTail(SHEET_NAME, 1);
+    const lastCode = lastItems[0]?.ITEM_CODE || "ASEW-000";
+    const lastSeq = parseInt(lastCode.split("-")[1] || "0");
 
     // Auto generate ITEM CODE
-    const itemCode = `ASEW-${String(items.length + 1).padStart(3, "0")}`;
+    const itemCode = `ASEW-${String(lastSeq + 1).padStart(3, "0")}`;
 
     await db.insertByHeader(SHEET_NAME, {
       ITEM_NAME,
@@ -54,7 +56,8 @@ exports.createItem = async (req, res) => {
 
 exports.getItems = async (req, res) => {
   try {
-    const items = await db.getAll(SHEET_NAME);
+    const { limit } = req.query;
+    const items = limit ? await db.getTail(SHEET_NAME, parseInt(limit)) : await db.getAll(SHEET_NAME);
 
     res.json(items);
   } catch (err) {
