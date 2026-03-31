@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import axios from "axios";
+import { API_BASE_URL } from "../config";
 import {
   FaFileAlt,
   FaInfoCircle,
@@ -192,7 +194,80 @@ const QuotationForm = () => {
   };
 
   const [isSearching, setIsSearching] = useState(false);
-  const handleSearchQuotation = () => {
+
+  // Helper to populate form from a found quotation record
+  const populateFormFromRecord = (found) => {
+    const header = found.header || found;
+    const items = found.items || [];
+
+    setValues((prev) => ({
+      ...prev,
+      Customer_Name: header.Customer_Name || "",
+      Buyer_Address: header.Buyer_Address || "",
+      Delivery_Address: header.Delivery_Address || "",
+      GSTIN_UIN: header.GSTIN_UIN || "",
+      Contact_Person: header.Contact_Person || "",
+      Email_Address: header.Email_Address || "",
+      Contact_Mobile: header.Contact_Mobile || "",
+      Discount: header.Discount || 0,
+      DiscountType: header.DiscountType || "%",
+      Freight_Charges: header.Freight_Charges || 0,
+      FreightType: header.FreightType || "Amount",
+      Freight_Note: header.Freight_Note || "",
+      Packaging_Charges: header.Packaging_Charges || 0,
+      PackagingType: header.PackagingType || "Amount",
+      Packaging_Note: header.Packaging_Note || "",
+      Term_Tax: header.Term_Tax || prev.Term_Tax,
+      Term_Payment: header.Term_Payment || prev.Term_Payment,
+      Term_Delivery: header.Term_Delivery || prev.Term_Delivery,
+      Term_Warranty: header.Term_Warranty || prev.Term_Warranty,
+      labEquipment: items.map((item, idx) => ({
+        id: Date.now() + idx,
+        item_name: (
+          item.item_name ||
+          item.Item_Name ||
+          item.ITEM_NAME ||
+          ""
+        ).trim(),
+        specifications: item.specifications || item.SPECIFICATIONS || "",
+        qty: Number(item.qty || item.Qty || item.QTY || 1),
+        unit_price: Number(
+          item.unit_price || item.Unit_Price || item.unitPrice || 0,
+        ),
+        total_price: Number(item.total_price || item.Total_Price || 0),
+        hsn: item.hsn || item.HSN_Code || item.HSN_CODE || "",
+        make: item.make || item.Make || item.MAKE || "",
+        nabl: item.nabl || item.NABL || "No",
+        discount_percent: Number(
+          item.discount_percent ||
+            item.Item_Discount ||
+            item.Discount_Percent ||
+            0,
+        ),
+        image: null,
+      })),
+    }));
+
+    const hasHSN = items.some((i) => i.hsn || i.HSN_Code || i.HSN_CODE);
+    const hasNABL = items.some(
+      (i) => (i.nabl || i.NABL) && (i.nabl || i.NABL) !== "No",
+    );
+    const hasMake = items.some((i) => i.make || i.Make || i.MAKE);
+    const hasDiscount = items.some(
+      (i) =>
+        Number(
+          i.discount_percent || i.Item_Discount || i.Discount_Percent,
+        ) > 0,
+    );
+    setShowFields({
+      hsn: !!hasHSN,
+      nabl: !!hasNABL,
+      make: !!hasMake,
+      discount: !!hasDiscount,
+    });
+  };
+
+  const handleSearchQuotation = async () => {
     const searchNo = values.Quotation_No.trim();
     if (!searchNo) {
       toast.error("Please enter a quotation number to search");
@@ -201,97 +276,46 @@ const QuotationForm = () => {
 
     setIsSearching(true);
 
-    // Simulate delay for UI feedback
-    setTimeout(() => {
-      // Search only in saves
-      const found = saves.find((r) => {
-        const recordNo = r.header?.Quotation_No || r.Quotation_No;
-        return recordNo === searchNo;
-      });
-
-      if (found) {
-        // Extract data
-        const header = found.header || found;
-        const items = found.items || [];
-
-        setValues((prev) => ({
-          ...prev,
-          Customer_Name: header.Customer_Name || "",
-          Buyer_Address: header.Buyer_Address || "",
-          Delivery_Address: header.Delivery_Address || "",
-          GSTIN_UIN: header.GSTIN_UIN || "",
-          Contact_Person: header.Contact_Person || "",
-          Email_Address: header.Email_Address || "",
-          Contact_Mobile: header.Contact_Mobile || "",
-          Discount: header.Discount || 0,
-          DiscountType: header.DiscountType || "%",
-          Freight_Charges: header.Freight_Charges || 0,
-          FreightType: header.FreightType || "Amount",
-          Freight_Note: header.Freight_Note || "",
-          Packaging_Charges: header.Packaging_Charges || 0,
-          PackagingType: header.PackagingType || "Amount",
-          Packaging_Note: header.Packaging_Note || "",
-          Term_Tax: header.Term_Tax || prev.Term_Tax,
-          Term_Payment: header.Term_Payment || prev.Term_Payment,
-          Term_Delivery: header.Term_Delivery || prev.Term_Delivery,
-          Term_Warranty: header.Term_Warranty || prev.Term_Warranty,
-          labEquipment: items.map((item, idx) => ({
-            id: Date.now() + idx,
-            // Backend stores as Item_Name (PascalCase); also cover camelCase & UPPERCASE
-            item_name: (
-              item.item_name ||
-              item.Item_Name ||
-              item.ITEM_NAME ||
-              ""
-            ).trim(),
-            specifications: item.specifications || item.SPECIFICATIONS || "",
-            qty: Number(item.qty || item.Qty || item.QTY || 1),
-            unit_price: Number(
-              item.unit_price || item.Unit_Price || item.unitPrice || 0,
-            ),
-            total_price: Number(item.total_price || item.Total_Price || 0),
-            // Backend stores as HSN_Code
-            hsn: item.hsn || item.HSN_Code || item.HSN_CODE || "",
-            make: item.make || item.Make || item.MAKE || "",
-            nabl: item.nabl || item.NABL || "No",
-            // Backend stores as Item_Discount
-            discount_percent: Number(
-              item.discount_percent ||
-                item.Item_Discount ||
-                item.Discount_Percent ||
-                0,
-            ),
-            image: null,
-          })),
-        }));
-
-        // Auto-tick checkboxes based on data
-        const hasHSN = items.some((i) => i.hsn || i.HSN_Code || i.HSN_CODE);
-        const hasNABL = items.some(
-          (i) => (i.nabl || i.NABL) && (i.nabl || i.NABL) !== "No",
+    try {
+      // 1. Try the saves (drafts) endpoint first
+      try {
+        const saveRes = await axios.get(
+          `${API_BASE_URL}/api/save?quotationNo=${encodeURIComponent(searchNo)}`,
         );
-        const hasMake = items.some((i) => i.make || i.Make || i.MAKE);
-        const hasDiscount = items.some(
-          (i) =>
-            Number(
-              i.discount_percent || i.Item_Discount || i.Discount_Percent,
-            ) > 0,
-        );
-
-        setShowFields({
-          hsn: !!hasHSN,
-          nabl: !!hasNABL,
-          make: !!hasMake,
-          discount: !!hasDiscount,
-        });
-
-        setIsSearching(false);
-        toast.success("Quotation found and loaded!");
-      } else {
-        setIsSearching(false);
-        toast.error("Quotation not found");
+        const record = saveRes.data?.data?.[0];
+        if (record) {
+          populateFormFromRecord(record);
+          toast.success("Quotation found and loaded!");
+          return;
+        }
+      } catch (saveErr) {
+        // 404 means not in saves — continue to responses
+        if (saveErr.response?.status !== 404) throw saveErr;
       }
-    }, 600);
+
+      // 2. Try the responses (submitted) endpoint
+      try {
+        const respRes = await axios.get(
+          `${API_BASE_URL}/api/response?quotationNo=${encodeURIComponent(searchNo)}`,
+        );
+        const record = respRes.data?.data?.[0];
+        if (record) {
+          populateFormFromRecord(record);
+          toast.success("Quotation found and loaded!");
+          return;
+        }
+      } catch (respErr) {
+        if (respErr.response?.status !== 404) throw respErr;
+      }
+
+      // Not found in either
+      toast.error(`Quotation "${searchNo}" not found`);
+    } catch (err) {
+      console.error("[Search] Unexpected error:", err);
+      toast.error("Error searching quotation. Please try again.");
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   const [showFields, setShowFields] = useState({
@@ -365,11 +389,13 @@ const QuotationForm = () => {
         setValues((prev) => ({
           ...prev,
           Customer_Name: value,
-          Buyer_Address: selectedCustomer.Buyer_Address || "",
-          GSTIN_UIN: selectedCustomer.GSTIN_UIN || "",
-          Contact_Person: selectedCustomer.Contact_Person || "",
-          Email_Address: selectedCustomer.Email_Address || "",
-          Contact_Mobile: selectedCustomer.Contact_Mobile || "",
+          Buyer_Address: selectedCustomer.Buyer_Address || selectedCustomer.BUYER_ADDRESS || "",
+          Delivery_Address: selectedCustomer.Delivery_Address || selectedCustomer.DELIVERY_ADDRESS || "",
+          GSTIN_UIN: selectedCustomer.GSTIN_UIN || selectedCustomer.GSTIN_UIN || "",
+          PAN_No: selectedCustomer.PAN_No || selectedCustomer.PAN_NO || "",
+          Contact_Person: selectedCustomer.Contact_Person || selectedCustomer.CONTACT_PERSON || "",
+          Email_Address: selectedCustomer.Email_Address || selectedCustomer.EMAIL_ADDRESS || "",
+          Contact_Mobile: selectedCustomer.Contact_Mobile || selectedCustomer.CONTACT_MOBILE || "",
         }));
       }
     }
@@ -749,7 +775,24 @@ const QuotationForm = () => {
           isOpen={isCustomerModalOpen}
           onClose={() => setIsCustomerModalOpen(false)}
           onSuccess={(name) => {
-            setValues((prev) => ({ ...prev, Customer_Name: name }));
+            const selectedCustomer = customers.find(
+              (c) => (c.Customer_Name || c.CUSTOMER_NAME) === name,
+            );
+            if (selectedCustomer) {
+              setValues((prev) => ({
+                ...prev,
+                Customer_Name: name,
+                Buyer_Address: selectedCustomer.Buyer_Address || selectedCustomer.BUYER_ADDRESS || "",
+                Delivery_Address: selectedCustomer.Delivery_Address || selectedCustomer.DELIVERY_ADDRESS || "",
+                GSTIN_UIN: selectedCustomer.GSTIN_UIN || selectedCustomer.GSTIN_UIN || "",
+                PAN_No: selectedCustomer.PAN_No || selectedCustomer.PAN_NO || "",
+                Contact_Person: selectedCustomer.Contact_Person || selectedCustomer.CONTACT_PERSON || "",
+                Email_Address: selectedCustomer.Email_Address || selectedCustomer.EMAIL_ADDRESS || "",
+                Contact_Mobile: selectedCustomer.Contact_Mobile || selectedCustomer.CONTACT_MOBILE || "",
+              }));
+            } else {
+              setFieldValue("Customer_Name", name);
+            }
             setIsCustomerModalOpen(false);
           }}
         />
