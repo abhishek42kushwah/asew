@@ -344,27 +344,20 @@ const QuotationForm = () => {
         ...responses.map((r) => r.header?.Quotation_No || r.Quotation_No),
       ].filter(Boolean);
 
-      let maxSeq = 0;
+      // New series: 2026-27/QT/0111 onwards
+      // Only count entries matching the new "2026-27/QT/0" prefix
+      let maxSeq = 110; // floor → first number = 0111
       allNos.forEach((no) => {
-        const parts = no.split("/");
-        const lastPart = parts[parts.length - 1];
-        const seq = parseInt(lastPart);
-        if (!isNaN(seq) && seq > maxSeq) {
-          maxSeq = seq;
+        if (no.startsWith("2026-27/QT/0")) {
+          const seq = parseInt(no.replace("2026-27/QT/", ""), 10);
+          if (!isNaN(seq) && seq > maxSeq) {
+            maxSeq = seq;
+          }
         }
       });
 
       const nextSeq = maxSeq + 1;
-      const currentDate = new Date();
-      let year = currentDate.getFullYear();
-      if (currentDate.getMonth() < 3) {
-        year -= 1;
-      }
-      const nextYearLastTwo = String(year + 1).slice(-2);
-      const currentYear = String(year);
-      const quotationNo = `${currentYear}-${nextYearLastTwo}/QT/${String(
-        nextSeq,
-      ).padStart(4, "0")}`;
+      const quotationNo = `2026-27/QT/${String(nextSeq).padStart(4, "0")}`;
 
       setFieldValue("Quotation_No", quotationNo);
     }
@@ -818,7 +811,7 @@ const QuotationForm = () => {
                   </span>{" "}
                   you want to copy:
                   <span className="block mt-1 text-xs text-gray-400 font-mono">
-                    e.g., 2025-26/QT/1250
+                    e.g., 2026-27/QT/0111
                   </span>
                 </p>
 
@@ -827,7 +820,7 @@ const QuotationForm = () => {
                   value={copyQuotationNo}
                   onChange={(e) => setCopyQuotationNo(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleCopyOld()}
-                  placeholder="2025-26/QT/0001"
+                  placeholder="2026-27/QT/0111"
                   autoFocus
                   className="w-full px-4 py-3 border-2 border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:border-[#f39c12] transition-colors placeholder-gray-300"
                 />

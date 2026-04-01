@@ -40,9 +40,7 @@ exports.createSave = async (req, res) => {
 
     // 2. Start fetching Item_Master and Recent Sheet Data in parallel
     const masterDataPromise = db.getAll("Item_Master");
-    const existingSavesPromise = data.Quotation_No
-      ? Promise.resolve([])
-      : db.getTail(SHEET_NAME, 50); // Just get last 50 for max sequence lookup
+    const existingSavesPromise = Promise.resolve([]); // No longer needed for sequence lookup
 
     const [uploadResults, masterData, allRows] = await Promise.all([
       Promise.all(uploadPromises),
@@ -61,19 +59,20 @@ exports.createSave = async (req, res) => {
     const isUpdate = !!quotationNo;
 
     if (!isUpdate) {
-      let maxSeq = 0;
-      allRows.forEach((r) => {
-        const no = r.Quotation_No;
-        if (no) {
-          const parts = no.split("/");
-          const seq = parseInt(parts[parts.length - 1]);
-          if (!isNaN(seq) && seq > maxSeq) {
-            maxSeq = seq;
-          }
+      // New 2026-27 series starts from 0111.
+      // Fetch ALL rows from the save sheet and find the max in the new series only.
+      // Entries like 2026-27/QT/2009 are excluded because they don't start with "2026-27/QT/0".
+      let maxSeq = 110; // floor → first number = 0111
+      const allSaveRows = await db.getAll(SHEET_NAME);
+      allSaveRows.forEach((r) => {
+        const no = (r.Quotation_No || "").trim();
+        if (no.startsWith("2026-27/QT/0")) {
+          const seq = parseInt(no.replace("2026-27/QT/", ""), 10);
+          if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
         }
       });
       const nextNumber = maxSeq + 1;
-      quotationNo = `2025-26/QT/${String(nextNumber).padStart(4, "0")}`;
+      quotationNo = `2026-27/QT/${String(nextNumber).padStart(4, "0")}`;
     } else {
       // If it's an update, delete existing rows for this quotation first
       await db.deleteRowsByColumn(SHEET_NAME, "Quotation_No", quotationNo);
