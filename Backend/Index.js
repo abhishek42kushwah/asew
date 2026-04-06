@@ -39,6 +39,7 @@ const itemRoutes = require("./src/routes/item.routes");
 const customerRoutes = require("./src/routes/customer.routes");
 const saveRoutes = require("./src/routes/save.routes");
 const responseRoutes = require("./src/routes/response.routes");
+const quotationRoutes = require("./src/routes/quotation.routes");
 
 // Routes registration
 
@@ -46,6 +47,7 @@ app.use("/api/item", itemRoutes);
 app.use("/api/customer", customerRoutes);
 app.use("/api/save", saveRoutes);
 app.use("/api/response", responseRoutes);
+app.use("/api/quotation", quotationRoutes);
 const fs = require("fs");
 if (fs.existsSync("uploads")) {
   app.use("/uploads", express.static("uploads"));

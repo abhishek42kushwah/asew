@@ -6,7 +6,7 @@ import * as Yup from "yup";
 import { createCustomer } from "../store/slices/customerSlice";
 import toast from "react-hot-toast";
 
-const CustomerModal = ({ isOpen, onClose, onSuccess }) => {
+const CustomerModal = ({ isOpen, onClose, onCustomerCreated }) => {
   const dispatch = useDispatch();
 
   const validationSchema = Yup.object({
@@ -43,13 +43,16 @@ const CustomerModal = ({ isOpen, onClose, onSuccess }) => {
 
         if (createCustomer.fulfilled.match(resultAction)) {
           toast.success("Customer created successfully!");
-          onSuccess(values.Customer_Name);
-          setTimeout(() => window.location.reload(), 1500);
+          // Pass the values back to parent for auto-fill
+          if (onCustomerCreated) {
+            onCustomerCreated(values);
+          }
           onClose();
         } else {
           toast.error(resultAction.payload || "Failed to create customer");
         }
-      } catch {
+      } catch (error) {
+        console.error("Error creating customer:", error);
         toast.error("An unexpected error occurred");
       } finally {
         setSubmitting(false);

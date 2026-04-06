@@ -62,9 +62,10 @@ exports.createSave = async (req, res) => {
       // New 2026-27 series starts from 0111.
       // Fetch ALL rows from the save sheet and find the max in the new series only.
       // Entries like 2026-27/QT/2009 are excluded because they don't start with "2026-27/QT/0".
-      let maxSeq = 110; // floor → first number = 0111
-      const allSaveRows = await db.getAll(SHEET_NAME);
-      allSaveRows.forEach((r) => {
+      let maxSeq = 110; 
+      // Optimized: Only check latest 100 rows to find the max sequence
+      const lastSaveRows = await db.getTail(SHEET_NAME, 100);
+      lastSaveRows.forEach((r) => {
         const no = (r.Quotation_No || "").trim();
         if (no.startsWith("2026-27/QT/0")) {
           const seq = parseInt(no.replace("2026-27/QT/", ""), 10);

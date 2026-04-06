@@ -180,7 +180,7 @@ export const generateQuotationPDF = (
     <!DOCTYPE html>
     <html>
     <head>
-     
+      <title>${escapeHtml(formData.Quotation_No).replace(/\//g, "_") || "Quotation"}</title>
       <style>
         @media print { 
           @page { size: auto; margin: 0mm; }
@@ -500,7 +500,7 @@ export const generatePDFBlob = async (
       <!DOCTYPE html>
       <html>
       <head>
-      
+        <title>${escapeHtml(formData.Quotation_No).replace(/\//g, "_") || "Quotation"}</title>
         <style>
           @media print { 
             @page { size: auto; margin: 0mm; }

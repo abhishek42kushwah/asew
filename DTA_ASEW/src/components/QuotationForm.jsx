@@ -25,8 +25,8 @@ import {
   updateCustomerMaster,
 } from "../store/slices/customerSlice";
 import { fetchItems } from "../store/slices/itemSlice";
-import { fetchSaves, createSave } from "../store/slices/saveSlice";
-import { fetchResponses, createResponse } from "../store/slices/responseSlice";
+import { createSave } from "../store/slices/saveSlice";
+import { createResponse } from "../store/slices/responseSlice";
 import CustomerModal from "./CustomerModal";
 import Select from "react-select";
 import toast from "react-hot-toast";
@@ -98,10 +98,6 @@ const QuotationForm = () => {
   const dispatch = useDispatch();
   const { customers } = useSelector((state) => state.customer);
   const { items: masterItems } = useSelector((state) => state.item);
-  const { saves, isLoading: saveLoading } = useSelector((state) => state.save);
-  const { responses, isLoading: responseLoading } = useSelector(
-    (state) => state.response,
-  );
 
   const formik = useFormik({
     initialValues: {
@@ -328,47 +324,25 @@ const QuotationForm = () => {
   useEffect(() => {
     dispatch(fetchCustomers());
     dispatch(fetchItems());
-    dispatch(fetchSaves());
-    dispatch(fetchResponses());
   }, [dispatch]);
 
-  useEffect(() => {
-    const isDataLoaded = !saveLoading && !responseLoading;
-    if (
-      isDataLoaded &&
-      (saves.length > 0 || responses.length > 0) &&
-      !values.Quotation_No
-    ) {
-      const allNos = [
-        ...saves.map((s) => s.header?.Quotation_No || s.Quotation_No),
-        ...responses.map((r) => r.header?.Quotation_No || r.Quotation_No),
-      ].filter(Boolean);
-
-      // New series: 2026-27/QT/0111 onwards
-      // Only count entries matching the new "2026-27/QT/0" prefix
-      let maxSeq = 110; // floor → first number = 0111
-      allNos.forEach((no) => {
-        if (no.startsWith("2026-27/QT/0")) {
-          const seq = parseInt(no.replace("2026-27/QT/", ""), 10);
-          if (!isNaN(seq) && seq > maxSeq) {
-            maxSeq = seq;
-          }
-        }
-      });
-
-      const nextSeq = maxSeq + 1;
-      const quotationNo = `2026-27/QT/${String(nextSeq).padStart(4, "0")}`;
-
-      setFieldValue("Quotation_No", quotationNo);
+  const fetchNextQuotationNo = async () => {
+    try {
+      const res = await axios.get(`${API_BASE_URL}/api/quotation/next-number`);
+      if (res.data?.success && res.data.nextQuotationNo) {
+        setFieldValue("Quotation_No", res.data.nextQuotationNo);
+      }
+    } catch (err) {
+      console.error("Failed to fetch next quotation number:", err);
     }
-  }, [
-    saves,
-    responses,
-    saveLoading,
-    responseLoading,
-    values.Quotation_No,
-    setFieldValue,
-  ]);
+  };
+
+  useEffect(() => {
+    if (!values.Quotation_No) {
+      fetchNextQuotationNo();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -487,7 +461,7 @@ const QuotationForm = () => {
   const [copyQuotationNo, setCopyQuotationNo] = useState("");
   const [copyLoading, setCopyLoading] = useState(false);
 
-  const handleCopyOld = () => {
+  const handleCopyOld = async () => {
     const searchNo = copyQuotationNo.trim();
     if (!searchNo) {
       toast.error("Please enter a quotation number");
@@ -496,14 +470,12 @@ const QuotationForm = () => {
 
     setCopyLoading(true);
 
-    // Simulate slight delay for UX feedback
-    setTimeout(() => {
-      const found = responses.find((r) => {
-        const recordNo = r.header?.Quotation_No || r.Quotation_No;
-        return recordNo === searchNo;
-      });
-
-      setCopyLoading(false);
+    try {
+      // Fetch directly from backend instead of searching in large Redux state
+      const respRes = await axios.get(
+        `${API_BASE_URL}/api/response?quotationNo=${encodeURIComponent(searchNo)}`,
+      );
+      const found = respRes.data?.data?.[0];
 
       if (found) {
         const header = found.header || found;
@@ -515,6 +487,7 @@ const QuotationForm = () => {
           Buyer_Address: header.Buyer_Address || "",
           Delivery_Address: header.Delivery_Address || "",
           GSTIN_UIN: header.GSTIN_UIN || "",
+          PAN_No: header.PAN_No || "",
           Contact_Person: header.Contact_Person || "",
           Email_Address: header.Email_Address || "",
           Contact_Mobile: header.Contact_Mobile || "",
@@ -555,7 +528,6 @@ const QuotationForm = () => {
           })),
         }));
 
-        // Auto-tick checkboxes based on data
         const hasHSN = items.some((i) => i.hsn || i.HSN_Code || i.HSN_CODE);
         const hasNABL = items.some((i) => i.nabl || i.NABL);
         const hasMake = items.some((i) => i.make || i.Make || i.MAKE);
@@ -580,7 +552,12 @@ const QuotationForm = () => {
       } else {
         toast.error(`Quotation "${searchNo}" not found in responses`);
       }
-    }, 600);
+    } catch (err) {
+      console.error("[CopyOld] Error:", err);
+      toast.error("Error fetching quotation details");
+    } finally {
+      setCopyLoading(false);
+    }
   };
 
   const handleSubmit = async (actionType) => {
@@ -767,24 +744,20 @@ const QuotationForm = () => {
         <CustomerModal
           isOpen={isCustomerModalOpen}
           onClose={() => setIsCustomerModalOpen(false)}
-          onSuccess={(name) => {
-            const selectedCustomer = customers.find(
-              (c) => (c.Customer_Name || c.CUSTOMER_NAME) === name,
-            );
-            if (selectedCustomer) {
+          onCustomerCreated={(newCust) => {
+            if (newCust) {
               setValues((prev) => ({
                 ...prev,
-                Customer_Name: name,
-                Buyer_Address: selectedCustomer.Buyer_Address || selectedCustomer.BUYER_ADDRESS || "",
-                Delivery_Address: selectedCustomer.Delivery_Address || selectedCustomer.DELIVERY_ADDRESS || "",
-                GSTIN_UIN: selectedCustomer.GSTIN_UIN || selectedCustomer.GSTIN_UIN || "",
-                PAN_No: selectedCustomer.PAN_No || selectedCustomer.PAN_NO || "",
-                Contact_Person: selectedCustomer.Contact_Person || selectedCustomer.CONTACT_PERSON || "",
-                Email_Address: selectedCustomer.Email_Address || selectedCustomer.EMAIL_ADDRESS || "",
-                Contact_Mobile: selectedCustomer.Contact_Mobile || selectedCustomer.CONTACT_MOBILE || "",
+                Customer_Name: newCust.Customer_Name,
+                Buyer_Address: newCust.Buyer_Address || "",
+                Delivery_Address: newCust.Delivery_Address || "",
+                GSTIN_UIN: newCust.GSTIN_UIN || "",
+                PAN_No: newCust.PAN_No || "",
+                Contact_Person: newCust.Contact_Person || "",
+                Email_Address: newCust.Email_Address || "",
+                Contact_Mobile: newCust.Contact_Mobile || "",
               }));
-            } else {
-              setFieldValue("Customer_Name", name);
+              toast.success(`Form filled for ${newCust.Customer_Name}`);
             }
             setIsCustomerModalOpen(false);
           }}
@@ -898,16 +871,21 @@ const QuotationForm = () => {
                 <FaHashtag className="text-gray-500" /> Quotation No.
               </label>
               <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-                <div className="flex-1 flex flex-col">
+                <div className="flex-1 flex flex-col relative">
                   <input
                     type="text"
                     name="Quotation_No"
                     value={values.Quotation_No}
                     onChange={handleInputChange}
                     onBlur={() => setFieldTouched("Quotation_No")}
-                    placeholder="Enter or Generate"
+                    placeholder="Enter manually"
                     className={`${inputClass} ${touched.Quotation_No && errors.Quotation_No ? "border-red-500 text-red-600" : ""}`}
                   />
+                  {!values.Quotation_No && (
+                    <div className="absolute right-3 top-[10px] text-[#3498db]">
+                      <FaSpinner className="animate-spin text-lg" />
+                    </div>
+                  )}
                   {touched.Quotation_No && errors.Quotation_No && (
                     <div className="text-red-500 text-[10px] mt-1">
                       {errors.Quotation_No}
@@ -1148,7 +1126,7 @@ const QuotationForm = () => {
                     <td className="p-2 border border-gray-200 text-center">
                       {index + 1}
                     </td>
-                    <td className="p-2 border border-gray-200">
+                    <td className="p-2 border border-gray-200" title={item.item_name}>
                       <div className="flex flex-col">
                         <Select
                           options={itemOptions}
@@ -1171,6 +1149,9 @@ const QuotationForm = () => {
                           placeholder="Select Item"
                           isClearable
                           menuPortalTarget={document.body}
+                          formatOptionLabel={(option) => (
+                            <span title={option.label}>{option.label}</span>
+                          )}
                           className={`${touched.labEquipment?.[index]?.item_name && errors.labEquipment?.[index]?.item_name ? "border-red-500 rounded" : ""}`}
                         />
                         {touched.labEquipment?.[index]?.item_name &&
@@ -1221,6 +1202,7 @@ const QuotationForm = () => {
                       <input
                         type="text"
                         value={item.specifications}
+                        title={item.specifications}
                         onChange={(e) =>
                           handleEquipmentChange(
                             index,
