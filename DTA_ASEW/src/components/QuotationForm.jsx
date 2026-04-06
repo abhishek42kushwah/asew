@@ -206,12 +206,12 @@ const QuotationForm = () => {
       Email_Address: header.Email_Address || "",
       Contact_Mobile: header.Contact_Mobile || "",
       Discount: header.Discount || 0,
-      DiscountType: header.DiscountType || "%",
+      DiscountType: header.Discount_Type || header.DiscountType || "%",
       Freight_Charges: header.Freight_Charges || 0,
-      FreightType: header.FreightType || "Amount",
+      FreightType: header.Freight_Type || header.FreightType || "Amount",
       Freight_Note: header.Freight_Note || "",
       Packaging_Charges: header.Packaging_Charges || 0,
-      PackagingType: header.PackagingType || "Amount",
+      PackagingType: header.Packaging_Type || header.PackagingType || "Amount",
       Packaging_Note: header.Packaging_Note || "",
       Term_Tax: header.Term_Tax || prev.Term_Tax,
       Term_Payment: header.Term_Payment || prev.Term_Payment,
@@ -442,14 +442,22 @@ const QuotationForm = () => {
     if (values.DiscountType === "%") {
       total -= subtotal * (values.Discount / 100);
     } else {
-      total -= values.Discount;
+      total -= Number(values.Discount);
     }
 
     // Freight
-    total += Number(values.Freight_Charges);
+    if (values.FreightType === "%") {
+      total += subtotal * (Number(values.Freight_Charges) / 100);
+    } else {
+      total += Number(values.Freight_Charges);
+    }
 
     // Packaging
-    total += Number(values.Packaging_Charges);
+    if (values.PackagingType === "%") {
+      total += subtotal * (Number(values.Packaging_Charges) / 100);
+    } else {
+      total += Number(values.Packaging_Charges);
+    }
 
     return total;
   };
