@@ -137,6 +137,8 @@ const QuotationForm = () => {
           nabl: "",
           make: "",
           discount_percent: 0,
+          gst_percent: 18,
+          gst_amount: 0,
         },
       ],
     },
@@ -240,6 +242,8 @@ const QuotationForm = () => {
             item.Discount_Percent ||
             0,
         ),
+        gst_percent: Number(item.gst_percent || item.GST_Percent || 18),
+        gst_amount: Number(item.gst_amount || item.GST_Amount || 0),
         image: null,
       })),
     }));
@@ -251,15 +255,14 @@ const QuotationForm = () => {
     const hasMake = items.some((i) => i.make || i.Make || i.MAKE);
     const hasDiscount = items.some(
       (i) =>
-        Number(
-          i.discount_percent || i.Item_Discount || i.Discount_Percent,
-        ) > 0,
+        Number(i.discount_percent || i.Item_Discount || i.Discount_Percent) > 0,
     );
     setShowFields({
       hsn: !!hasHSN,
       nabl: !!hasNABL,
       make: !!hasMake,
       discount: !!hasDiscount,
+      gst: true,
     });
   };
 
@@ -319,6 +322,7 @@ const QuotationForm = () => {
     nabl: false,
     make: false,
     discount: false,
+    gst: true,
   });
 
   useEffect(() => {
@@ -356,13 +360,29 @@ const QuotationForm = () => {
         setValues((prev) => ({
           ...prev,
           Customer_Name: value,
-          Buyer_Address: selectedCustomer.Buyer_Address || selectedCustomer.BUYER_ADDRESS || "",
-          Delivery_Address: selectedCustomer.Delivery_Address || selectedCustomer.DELIVERY_ADDRESS || "",
-          GSTIN_UIN: selectedCustomer.GSTIN_UIN || selectedCustomer.GSTIN_UIN || "",
+          Buyer_Address:
+            selectedCustomer.Buyer_Address ||
+            selectedCustomer.BUYER_ADDRESS ||
+            "",
+          Delivery_Address:
+            selectedCustomer.Delivery_Address ||
+            selectedCustomer.DELIVERY_ADDRESS ||
+            "",
+          GSTIN_UIN:
+            selectedCustomer.GSTIN_UIN || selectedCustomer.GSTIN_UIN || "",
           PAN_No: selectedCustomer.PAN_No || selectedCustomer.PAN_NO || "",
-          Contact_Person: selectedCustomer.Contact_Person || selectedCustomer.CONTACT_PERSON || "",
-          Email_Address: selectedCustomer.Email_Address || selectedCustomer.EMAIL_ADDRESS || "",
-          Contact_Mobile: selectedCustomer.Contact_Mobile || selectedCustomer.CONTACT_MOBILE || "",
+          Contact_Person:
+            selectedCustomer.Contact_Person ||
+            selectedCustomer.CONTACT_PERSON ||
+            "",
+          Email_Address:
+            selectedCustomer.Email_Address ||
+            selectedCustomer.EMAIL_ADDRESS ||
+            "",
+          Contact_Mobile:
+            selectedCustomer.Contact_Mobile ||
+            selectedCustomer.CONTACT_MOBILE ||
+            "",
         }));
       }
     }
@@ -392,12 +412,19 @@ const QuotationForm = () => {
       field === "qty" ||
       field === "unit_price" ||
       field === "discount_percent" ||
+      field === "gst_percent" ||
       field === "item_name"
     ) {
-      const qty = updated[index].qty || 0;
-      const price = updated[index].unit_price || 0;
-      const disc = updated[index].discount_percent || 0;
-      updated[index].total_price = qty * price * (1 - disc / 100);
+      const qty = Number(updated[index].qty) || 0;
+      const price = Number(updated[index].unit_price) || 0;
+      const disc = Number(updated[index].discount_percent) || 0;
+      const gstP = Number(updated[index].gst_percent) || 0;
+
+      const taxable = qty * price * (1 - disc / 100);
+      const gstAmt = taxable * (gstP / 100);
+
+      updated[index].gst_amount = gstAmt;
+      updated[index].total_price = taxable + gstAmt;
     }
     setFieldValue("labEquipment", updated);
   };
@@ -417,6 +444,8 @@ const QuotationForm = () => {
         nabl: "",
         make: "",
         discount_percent: 0,
+        gst_percent: 18,
+        gst_amount: 0,
       },
     ]);
   };
@@ -431,12 +460,20 @@ const QuotationForm = () => {
   };
 
   const calculateSubtotal = () => {
-    return values.labEquipment.reduce((sum, item) => sum + item.total_price, 0);
+    return values.labEquipment.reduce((sum, item) => {
+      const taxable = (item.qty || 0) * (item.unit_price || 0) * (1 - (item.discount_percent || 0) / 100);
+      return sum + taxable;
+    }, 0);
+  };
+
+  const calculateTotalGST = () => {
+    return values.labEquipment.reduce((sum, item) => sum + (item.gst_amount || 0), 0);
   };
 
   const calculateGrandTotal = () => {
     const subtotal = calculateSubtotal();
-    let total = subtotal;
+    const totalGST = calculateTotalGST();
+    let total = subtotal + totalGST;
 
     // Discount
     if (values.DiscountType === "%") {
@@ -532,6 +569,8 @@ const QuotationForm = () => {
                 item.Discount_Percent ||
                 0,
             ),
+            gst_percent: Number(item.gst_percent || item.GST_Percent || 18),
+            gst_amount: Number(item.gst_amount || item.GST_Amount || 0),
             image: null,
           })),
         }));
@@ -552,6 +591,7 @@ const QuotationForm = () => {
           nabl: !!hasNABL,
           make: !!hasMake,
           discount: !!hasDiscount,
+          gst: true,
         });
 
         toast.success(`Quotation "${searchNo}" copied successfully!`);
@@ -622,6 +662,7 @@ const QuotationForm = () => {
       }));
       data.append("ITEMS", JSON.stringify(itemsForJSON));
       data.append("Subtotal", calculateSubtotal());
+      data.append("Total_GST", calculateTotalGST());
       data.append("Total_Amount", calculateGrandTotal());
 
       // Append COMPRESSED images only for valid items
@@ -637,6 +678,7 @@ const QuotationForm = () => {
       // 3. Generate PDF
       const totals = {
         subtotal: calculateSubtotal(),
+        totalGST: calculateTotalGST(),
         grandTotal: calculateGrandTotal(),
       };
       const pdfBlob = await generatePDFBlob(
@@ -681,9 +723,12 @@ const QuotationForm = () => {
       }
     } catch (err) {
       console.error("Processing failed:", err);
-      toast.error("Failed to process quotation details. Proceeding without some optimizations.", {
-        id: loadingToastId,
-      });
+      toast.error(
+        "Failed to process quotation details. Proceeding without some optimizations.",
+        {
+          id: loadingToastId,
+        },
+      );
     }
 
     if (actionType === "save") {
@@ -1057,7 +1102,7 @@ const QuotationForm = () => {
           </div>
 
           <div className="flex flex-wrap justify-start sm:justify-end gap-3 sm:gap-6 mb-6">
-            {["hsn", "nabl", "make", "discount"].map((field) => (
+            {["hsn", "nabl", "make", "discount", "gst"].map((field) => (
               <label
                 key={field}
                 className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 cursor-pointer bg-gray-50 px-2 py-1 rounded-md border border-gray-100 sm:bg-transparent sm:p-0 sm:border-0"
@@ -1117,6 +1162,16 @@ const QuotationForm = () => {
                       Disc. %
                     </th>
                   )}
+                  {showFields.gst && (
+                    <>
+                      <th className="w-[80px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
+                        GST %
+                      </th>
+                      <th className="w-[100px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
+                        GST Amt
+                      </th>
+                    </>
+                  )}
                   <th className="w-[140px] p-3.5 border border-white/10 font-semibold text-[0.85rem]">
                     Total Price
                   </th>
@@ -1134,7 +1189,10 @@ const QuotationForm = () => {
                     <td className="p-2 border border-gray-200 text-center">
                       {index + 1}
                     </td>
-                    <td className="p-2 border border-gray-200" title={item.item_name}>
+                    <td
+                      className="p-2 border border-gray-200"
+                      title={item.item_name}
+                    >
                       <div className="flex flex-col">
                         <Select
                           options={itemOptions}
@@ -1288,6 +1346,32 @@ const QuotationForm = () => {
                         />
                       </td>
                     )}
+                    {showFields.gst && (
+                      <>
+                        <td className="p-2 border border-gray-200">
+                          <input
+                            type="number"
+                            value={item.gst_percent}
+                            onChange={(e) =>
+                              handleEquipmentChange(
+                                index,
+                                "gst_percent",
+                                Number(e.target.value),
+                              )
+                            }
+                            className="w-full p-2 border border-gray-200 rounded text-sm text-center"
+                          />
+                        </td>
+                        <td className="p-2 border border-gray-200">
+                          <input
+                            type="number"
+                            value={item.gst_amount.toFixed(2)}
+                            readOnly
+                            className="w-full p-2 bg-gray-50 border border-gray-200 rounded text-sm text-right font-semibold"
+                          />
+                        </td>
+                      </>
+                    )}
                     <td className="p-2 border border-gray-200">
                       <input
                         type="number"
@@ -1344,8 +1428,16 @@ const QuotationForm = () => {
                   </td>
                   <td className="text-center">-</td>
                   {showFields.discount && <td className="text-center">-</td>}
+                  {showFields.gst && (
+                    <>
+                      <td className="text-center">-</td>
+                      <td className="text-right pr-2 text-[#2ecc71]">
+                        {calculateTotalGST().toFixed(2)}
+                      </td>
+                    </>
+                  )}
                   <td className="text-center text-[#2ecc71]">
-                    {calculateSubtotal()}
+                    {calculateGrandTotal().toFixed(2)}
                   </td>
                   <td colSpan={2}></td>
                 </tr>
@@ -1468,6 +1560,12 @@ const QuotationForm = () => {
               className="w-full sm:w-52 p-2.5 sm:p-3 bg-gray-50 border border-gray-200 rounded text-right text-[#2ecc71] font-bold text-xl sm:text-2xl"
             />
           </div>
+
+          <div className="mt-4 text-right flex flex-col sm:flex-row items-end sm:items-center justify-end gap-3 sm:gap-5">
+            <span className="text-md sm:text-lg font-semibold text-gray-500">
+              (Incl. Total GST: ₹{calculateTotalGST().toFixed(2)})
+            </span>
+          </div>
         </div>
 
         {/* T&C Card */}
@@ -1545,6 +1643,7 @@ const QuotationForm = () => {
             onClick={() => {
               const totals = {
                 subtotal: calculateSubtotal(),
+                totalGST: calculateTotalGST(),
                 grandTotal: calculateGrandTotal(),
               };
               generateQuotationPDF(

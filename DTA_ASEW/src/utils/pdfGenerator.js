@@ -55,7 +55,10 @@ export const generateQuotationPDF = (
   if (showFields.hsn) tableHeaders += `<th>HSN</th>`;
   if (showFields.nabl) tableHeaders += `<th>NABL</th>`;
   tableHeaders += `<th>Qty</th><th>Unit Price</th>`;
-  if (showFields.discount) tableHeaders += `<th>Disc %</th>`;
+    if (showFields.discount) tableHeaders += `<th>Disc %</th>`;
+  if (showFields.gst) {
+    tableHeaders += `<th>GST %</th><th>GST Amt</th>`;
+  }
   tableHeaders += `<th>Total Price</th>`;
   if (hasImages) tableHeaders += `<th>Image</th>`;
 
@@ -95,6 +98,11 @@ export const generateQuotationPDF = (
         ? `<td>${parseFloat(item.discount_percent || 0).toFixed(2)}%</td>`
         : "";
 
+        const gstCell = showFields.gst
+        ? `<td style="text-align:center;">${item.gst_percent}%</td>
+           <td style="text-align:right;">${(item.gst_amount || 0).toFixed(2)}</td>`
+        : "";
+
       return `
         <tr style="page-break-inside: avoid;">
           <td style="text-align:center;">${index + 1}</td>
@@ -106,6 +114,7 @@ export const generateQuotationPDF = (
           <td style="text-align:center;">${item.qty}</td>
           <td style="text-align:right;">${item.unit_price.toFixed(2)}</td>
           ${discCell}
+          ${gstCell}
           <td style="text-align:right;">${item.total_price.toFixed(2)}</td>
           ${imageCellHtml}
         </tr>
@@ -175,6 +184,10 @@ export const generateQuotationPDF = (
           formData.Delivery_Address,
         )}</p>`
       : "";
+
+  const taxRowHtml = totals.totalGST > 0
+    ? `<tr><th>Total GST</th><td>${totals.totalGST.toFixed(2)}</td></tr>`
+    : `<tr><th>Tax</th><td>${escapeHtml(formData.Term_Tax || "")}</td></tr>`;
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -269,10 +282,11 @@ export const generateQuotationPDF = (
               ${rowsHtml}
               <tr>
                 <td colspan="${baseColSpan}" style="text-align:right;"><strong>Total</strong></td>
-                <td style="text-align:center;">${totalQty}</td>
+                <td style="text-align:right;">${totalQty}</td>
                 <td></td> 
                 ${showFields.discount ? "<td></td>" : ""} 
-                <td style="text-align:right;">${totals.subtotal.toFixed(2)}</td>
+                ${showFields.gst ? "<td></td><td></td>" : ""}
+                <td style="text-align:right;">${totals.grandTotal.toFixed(2)}</td>
                 ${footerImageCellHtml}
               </tr>
             </tbody>
@@ -284,7 +298,8 @@ export const generateQuotationPDF = (
             ${discountRowHtml}
             <tr><th>Freight</th><td>${freightDisplay}</td></tr>
             <tr><th>Packaging</th><td>${packagingDisplay}</td></tr>
-            <tr><th>Tax</th><td>${escapeHtml(formData.Term_Tax || "")}</td></tr>
+            ${taxRowHtml}
+            <tr><th>Grand Total</th><td style="font-weight:bold; color:#dc2626;">₹ ${totals.grandTotal.toFixed(2)}</td></tr>
             <tr><th>Payment</th><td>${escapeHtml(formData.Term_Payment || "")}</td></tr>
             <tr><th>Delivery</th><td>${escapeHtml(formData.Term_Delivery || "")}</td></tr>
             <tr><th>Warranty</th><td>${escapeHtml(formData.Term_Warranty || "").replace(/\n/g, "<br>")}</td></tr>
@@ -382,6 +397,9 @@ export const generatePDFBlob = async (
     if (showFields.nabl) tableHeaders += `<th>NABL</th>`;
     tableHeaders += `<th>Qty</th><th>Unit Price</th>`;
     if (showFields.discount) tableHeaders += `<th>Disc %</th>`;
+    if (showFields.gst) {
+      tableHeaders += `<th>GST %</th><th>GST Amt</th>`;
+    }
     tableHeaders += `<th>Total Price</th>`;
     if (hasImages) tableHeaders += `<th>Image</th>`;
 
@@ -422,6 +440,11 @@ export const generatePDFBlob = async (
           ? `<td>${parseFloat(item.discount_percent || 0).toFixed(2)}%</td>`
           : "";
 
+        const gstCell = showFields.gst
+          ? `<td style="text-align:center;">${item.gst_percent}%</td>
+             <td style="text-align:right;">${(item.gst_amount || 0).toFixed(2)}</td>`
+          : "";
+
         return `
           <tr style="page-break-inside: avoid;">
             <td style="text-align:center;">${index + 1}</td>
@@ -433,6 +456,7 @@ export const generatePDFBlob = async (
             <td style="text-align:center;">${item.qty}</td>
             <td style="text-align:right;">${item.unit_price.toFixed(2)}</td>
             ${discCell}
+            ${gstCell}
             <td style="text-align:right;">${item.total_price.toFixed(2)}</td>
             ${imageCellHtml}
           </tr>
@@ -495,6 +519,10 @@ export const generatePDFBlob = async (
       formData.Delivery_Address && formData.Delivery_Address.trim() !== ""
         ? `<p style="margin-top: 10px;"><strong>Delivery Address:</strong><br>${formatAddress(formData.Delivery_Address)}</p>`
         : "";
+
+    const taxRowHtml = totals.totalGST > 0
+      ? `<tr><th>Total GST</th><td>${totals.totalGST.toFixed(2)}</td></tr>`
+      : `<tr><th>Tax</th><td>${escapeHtml(formData.Term_Tax || "")}</td></tr>`;
 
     const htmlContent = `
       <!DOCTYPE html>
@@ -589,12 +617,13 @@ export const generatePDFBlob = async (
                 ${rowsHtml}
                 <tr>
                   <td colspan="${baseColSpan}" style="text-align:right;"><strong>Total</strong></td>
-                  <td style="text-align:center;">${totalQty}</td>
-                  <td></td> 
-                  ${showFields.discount ? "<td></td>" : ""} 
-                  <td style="text-align:right;">${totals.subtotal.toFixed(2)}</td>
-                  ${footerImageCellHtml}
-                </tr>
+                <td style="text-align:right;">${totalQty}</td>
+                <td></td> 
+                ${showFields.discount ? "<td></td>" : ""} 
+                ${showFields.gst ? "<td></td><td></td>" : ""}
+                <td style="text-align:right;">${totals.grandTotal.toFixed(2)}</td>
+                ${footerImageCellHtml}
+              </tr>
               </tbody>
             </table>
           </div>
@@ -602,12 +631,13 @@ export const generatePDFBlob = async (
             <h3><span class="underline-text">Terms & Conditions:</span></h3>
             <table class="terms-table">
               ${discountRowHtml}
-              <tr><th>Freight</th><td>${freightDisplay}</td></tr>
-              <tr><th>Packaging</th><td>${packagingDisplay}</td></tr>
-              <tr><th>Tax</th><td>${escapeHtml(formData.Term_Tax || "")}</td></tr>
-              <tr><th>Payment</th><td>${escapeHtml(formData.Term_Payment || "")}</td></tr>
-              <tr><th>Delivery</th><td>${escapeHtml(formData.Term_Delivery || "")}</td></tr>
-              <tr><th>Warranty</th><td>${escapeHtml(formData.Term_Warranty || "").replace(/\n/g, "<br>")}</td></tr>
+            <tr><th>Freight</th><td>${freightDisplay}</td></tr>
+            <tr><th>Packaging</th><td>${packagingDisplay}</td></tr>
+            ${taxRowHtml}
+            <tr><th>Grand Total</th><td style="font-weight:bold; color:#dc2626;">₹ ${totals.grandTotal.toFixed(2)}</td></tr>
+            <tr><th>Payment</th><td>${escapeHtml(formData.Term_Payment || "")}</td></tr>
+            <tr><th>Delivery</th><td>${escapeHtml(formData.Term_Delivery || "")}</td></tr>
+            <tr><th>Warranty</th><td>${escapeHtml(formData.Term_Warranty || "").replace(/\n/g, "<br>")}</td></tr>
              
             </table>
           </div>

@@ -109,8 +109,11 @@ exports.createSave = async (req, res) => {
       const make = showFields.make ? (master.MAKE || item.make || "") : "";
       const nabl = showFields.nabl ? (item.nabl || data.NABL || master.NABL || "") : "";
       const itemDiscount = showFields.discount ? (item.discount || item.discount_percent || 0) : 0;
+      const gstPercent = item.gst_percent || 18;
+      const gstAmount = item.gst_amount || 0;
 
-      const totalPrice = unitPrice * item.qty;
+      const taxablePrice = unitPrice * item.qty * (1 - itemDiscount / 100);
+      const totalPrice = taxablePrice + gstAmount;
       const isLastItem = idx === items.length - 1;
 
       // Match item image with uploaded URL based on order
@@ -138,7 +141,11 @@ exports.createSave = async (req, res) => {
         Image_URL: currentItemImage,
         Discount: data.Discount,
         Discount_Type: data.DiscountType,
-        GST: data.GST,
+        Discount_Type: data.DiscountType,
+        GST: data.GST, // Keep original if needed, but we now have Total_GST
+        Total_GST: data.Total_GST,
+        Item_GST_Percent: gstPercent,
+        Item_GST_Amount: gstAmount,
         Freight_Charges: data.Freight_Charges,
         Freight_Type: data.FreightType,
         Packaging_Charges: data.Packaging_Charges,
@@ -246,6 +253,8 @@ exports.getAllSave = async (req, res) => {
               Make: item.make || item.Make || "",
               NABL: item.nabl || item.NABL || "",
               Item_Discount: item.discount_percent || item.discount || item.Item_Discount || 0,
+              GST_Percent: item.gst_percent || item.GST_Percent || 0,
+              GST_Amount: item.gst_amount || item.GST_Amount || 0,
             });
           });
         } catch (e) {
@@ -287,6 +296,8 @@ exports.getAllSave = async (req, res) => {
           Make: r.Make,
           NABL: r.NABL,
           Item_Discount: r.Item_Discount,
+          GST_Percent: r.Item_GST_Percent || r.GST_Percent,
+          GST_Amount: r.Item_GST_Amount || r.GST_Amount,
         });
       }
     });

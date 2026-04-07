@@ -83,7 +83,12 @@ exports.createResponse = async (req, res) => {
       const unitPrice = item.unit_price || master.UNIT_PRICE || 0;
       const hsn = master.HSN_CODE || item.hsn_code || item.hsn || "";
       const make = master.MAKE || item.make || "";
-      const totalPrice = unitPrice * item.qty;
+      const itemDiscount = item.discount || item.discount_percent || 0;
+      const gstPercent = item.gst_percent || 18;
+      const gstAmount = item.gst_amount || 0;
+
+      const taxablePrice = unitPrice * item.qty * (1 - itemDiscount / 100);
+      const totalPrice = taxablePrice + gstAmount;
       const isLastItem = idx === items.length - 1;
 
       // Match item image based on order
@@ -112,6 +117,9 @@ exports.createResponse = async (req, res) => {
         Discount: data.Discount,
         Discount_Type: data.DiscountType,
         GST: data.GST,
+        Total_GST: data.Total_GST,
+        Item_GST_Percent: gstPercent,
+        Item_GST_Amount: gstAmount,
         Freight_Charges: data.Freight_Charges,
         Freight_Type: data.FreightType,
         Packaging_Charges: data.Packaging_Charges,
@@ -218,6 +226,8 @@ exports.getAllResponse = async (req, res) => {
               Make: item.make || item.Make || "",
               NABL: item.nabl || item.NABL || "",
               Item_Discount: item.discount_percent || item.discount || item.Item_Discount || 0,
+              GST_Percent: item.gst_percent || item.GST_Percent || 0,
+              GST_Amount: item.gst_amount || item.GST_Amount || 0,
             });
           });
         } catch (e) {
@@ -259,6 +269,8 @@ exports.getAllResponse = async (req, res) => {
           Make: r.Make,
           NABL: r.NABL,
           Item_Discount: r.Item_Discount,
+          GST_Percent: r.Item_GST_Percent || r.GST_Percent,
+          GST_Amount: r.Item_GST_Amount || r.GST_Amount,
         });
       }
     });
