@@ -1504,6 +1504,11 @@ const QuotationForm = () => {
                   <option value="Amount">Amount</option>
                 </select>
               </div>
+              {values.DiscountType === "%" && (
+                <div className="text-xs text-red-400 -mt-1 font-medium">
+                  Calculated Discount: ₹{(calculateSubtotal() * (Number(values.Discount) / 100)).toFixed(2)}
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col gap-3">
@@ -1528,6 +1533,11 @@ const QuotationForm = () => {
                   <option value="%">%</option>
                 </select>
               </div>
+              {values.FreightType === "%" && (
+                <div className="text-xs text-[#2ecc71] -mt-1 font-medium">
+                  Calculated Amount: ₹{(calculateSubtotal() * (Number(values.Freight_Charges) / 100)).toFixed(2)}
+                </div>
+              )}
               <input
                 type="text"
                 name="Freight_Note"
@@ -1560,6 +1570,11 @@ const QuotationForm = () => {
                   <option value="%">%</option>
                 </select>
               </div>
+              {values.PackagingType === "%" && (
+                <div className="text-xs text-[#2ecc71] -mt-1 font-medium">
+                  Calculated Amount: ₹{(calculateSubtotal() * (Number(values.Packaging_Charges) / 100)).toFixed(2)}
+                </div>
+              )}
               <input
                 type="text"
                 name="Packaging_Note"
