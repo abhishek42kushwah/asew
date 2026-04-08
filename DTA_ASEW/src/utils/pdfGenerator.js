@@ -50,17 +50,17 @@ export const generateQuotationPDF = (
     (item) => item.image && item.image !== "",
   );
 
-  let tableHeaders = `<th>Sr. No.</th><th>Item</th><th>Specifications</th>`;
-  if (showFields.make) tableHeaders += `<th>Make</th>`;
-  if (showFields.hsn) tableHeaders += `<th>HSN</th>`;
-  if (showFields.nabl) tableHeaders += `<th>NABL</th>`;
-  tableHeaders += `<th>Qty</th><th>Unit Price</th>`;
-    if (showFields.discount) tableHeaders += `<th>Disc %</th>`;
+  let tableHeaders = `<th style="white-space: nowrap; width: 4%;">Sr. No.</th><th style="width: 20%;">Item</th><th style="width: 35%;">Specifications</th>`;
+  if (showFields.make) tableHeaders += `<th style="white-space: nowrap;">Make</th>`;
+  if (showFields.hsn) tableHeaders += `<th style="white-space: nowrap;">HSN</th>`;
+  if (showFields.nabl) tableHeaders += `<th style="white-space: nowrap;">NABL</th>`;
+  tableHeaders += `<th style="white-space: nowrap;">Qty</th><th style="white-space: nowrap;">Unit Price</th>`;
+  if (showFields.discount) tableHeaders += `<th style="white-space: nowrap;">Disc %</th>`;
   if (showFields.gst) {
-    tableHeaders += `<th>GST %</th><th>GST Amt</th>`;
+    tableHeaders += `<th style="white-space: nowrap;">GST %</th><th style="white-space: nowrap;">GST Amt</th>`;
   }
-  tableHeaders += `<th>Total Price</th>`;
-  if (hasImages) tableHeaders += `<th>Image</th>`;
+  tableHeaders += `<th style="white-space: nowrap;">Total Price</th>`;
+  if (hasImages) tableHeaders += `<th style="white-space: nowrap;">Image</th>`;
 
   const footerImageCellHtml = hasImages ? "<td></td>" : "";
   let baseColSpan = 3;
@@ -100,22 +100,22 @@ export const generateQuotationPDF = (
 
         const gstCell = showFields.gst
         ? `<td style="text-align:center;">${item.gst_percent}%</td>
-           <td style="text-align:right;">${(item.gst_amount || 0).toFixed(2)}</td>`
+           <td style="text-align:right; white-space: nowrap;">${(item.gst_amount || 0).toFixed(2)}</td>`
         : "";
 
       return `
         <tr style="page-break-inside: avoid;">
           <td style="text-align:center;">${index + 1}</td>
-          <td style="font-weight: bold; width: 180px;">${escapeHtml(item.item_name)}</td>
-          <td style="font-size: 9pt; white-space: pre-wrap;">${escapeHtml(item.specifications)}</td>
+          <td style="font-weight: bold; text-align: left;">${escapeHtml(item.item_name)}</td>
+          <td style="font-size: 9pt; white-space: pre-wrap; text-align: left;">${escapeHtml(item.specifications)}</td>
           ${makeCell}
           ${hsnCell}
           ${nablCell}
           <td style="text-align:center;">${item.qty}</td>
-          <td style="text-align:right;">${item.unit_price.toFixed(2)}</td>
+          <td style="text-align:right; white-space: nowrap;">${item.unit_price.toFixed(2)}</td>
           ${discCell}
           ${gstCell}
-          <td style="text-align:right;">${item.total_price.toFixed(2)}</td>
+          <td style="text-align:right; white-space: nowrap;">${item.total_price.toFixed(2)}</td>
           ${imageCellHtml}
         </tr>
       `;
@@ -216,9 +216,9 @@ export const generateQuotationPDF = (
         .quotation-title { text-align: center; font-size: 16pt; font-weight: 800; margin-bottom: 20px; color: #1e293b; text-transform: uppercase; }
         .intro { margin-bottom: 20px; font-size: 10pt; padding: 0 15px; }
         .equipment-title { font-size: 12pt; font-weight: bold; margin-bottom: 15px; color: #334155; }
-        table.equipment-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
-        .equipment-table th, .equipment-table td { border: 1px solid #cbd5e1; padding: 10px 8px; text-align: left; font-size: 9.5pt; vertical-align: top; }
-        .equipment-table th { background-color: #334155; font-weight: bold; color: #ffffff; text-transform: uppercase; font-size: 8.5pt; letter-spacing: 0.5px; }
+        table.equipment-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; table-layout: auto; }
+        .equipment-table th, .equipment-table td { border: 1px solid #cbd5e1; padding: 6px 4px; text-align: center; font-size: 8pt; vertical-align: top; }
+        .equipment-table th { background-color: #334155; font-weight: bold; color: #ffffff; text-transform: uppercase; font-size: 7.5pt; letter-spacing: 0.5px; }
         .equipment-table tbody tr:nth-child(even) { background-color: #f8fafc; }
         .equipment-table tbody tr:last-child { font-weight: bold; background-color: #e2e8f0; color: #1e293b; }
         .terms { margin-bottom: 25px; page-break-inside: avoid; }
@@ -391,17 +391,17 @@ export const generatePDFBlob = async (
       (item) => item.image && item.image !== "",
     );
 
-    let tableHeaders = `<th>Sr. No.</th><th>Item</th><th>Specifications</th>`;
-    if (showFields.make) tableHeaders += `<th>Make</th>`;
-    if (showFields.hsn) tableHeaders += `<th>HSN</th>`;
-    if (showFields.nabl) tableHeaders += `<th>NABL</th>`;
-    tableHeaders += `<th>Qty</th><th>Unit Price</th>`;
-    if (showFields.discount) tableHeaders += `<th>Disc %</th>`;
+    let tableHeaders = `<th style="white-space: nowrap; width: 4%;">Sr. No.</th><th style="width: 20%;">Item</th><th style="width: 35%;">Specifications</th>`;
+    if (showFields.make) tableHeaders += `<th style="white-space: nowrap;">Make</th>`;
+    if (showFields.hsn) tableHeaders += `<th style="white-space: nowrap;">HSN</th>`;
+    if (showFields.nabl) tableHeaders += `<th style="white-space: nowrap;">NABL</th>`;
+    tableHeaders += `<th style="white-space: nowrap;">Qty</th><th style="white-space: nowrap;">Unit Price</th>`;
+    if (showFields.discount) tableHeaders += `<th style="white-space: nowrap;">Disc %</th>`;
     if (showFields.gst) {
-      tableHeaders += `<th>GST %</th><th>GST Amt</th>`;
+      tableHeaders += `<th style="white-space: nowrap;">GST %</th><th style="white-space: nowrap;">GST Amt</th>`;
     }
-    tableHeaders += `<th>Total Price</th>`;
-    if (hasImages) tableHeaders += `<th>Image</th>`;
+    tableHeaders += `<th style="white-space: nowrap;">Total Price</th>`;
+    if (hasImages) tableHeaders += `<th style="white-space: nowrap;">Image</th>`;
 
     const footerImageCellHtml = hasImages ? "<td></td>" : "";
     let baseColSpan = 3;
@@ -442,22 +442,22 @@ export const generatePDFBlob = async (
 
         const gstCell = showFields.gst
           ? `<td style="text-align:center;">${item.gst_percent}%</td>
-             <td style="text-align:right;">${(item.gst_amount || 0).toFixed(2)}</td>`
+             <td style="text-align:right; white-space: nowrap;">${(item.gst_amount || 0).toFixed(2)}</td>`
           : "";
 
         return `
           <tr style="page-break-inside: avoid;">
             <td style="text-align:center;">${index + 1}</td>
-            <td style="font-weight: bold; width: 180px;">${escapeHtml(item.item_name)}</td>
-            <td style="font-size: 9pt; white-space: pre-wrap;">${escapeHtml(item.specifications)}</td>
+            <td style="font-weight: bold; text-align: left;">${escapeHtml(item.item_name)}</td>
+            <td style="font-size: 9pt; white-space: pre-wrap; text-align: left;">${escapeHtml(item.specifications)}</td>
             ${makeCell}
             ${hsnCell}
             ${nablCell}
             <td style="text-align:center;">${item.qty}</td>
-            <td style="text-align:right;">${item.unit_price.toFixed(2)}</td>
+            <td style="text-align:right; white-space: nowrap;">${item.unit_price.toFixed(2)}</td>
             ${discCell}
             ${gstCell}
-            <td style="text-align:right;">${item.total_price.toFixed(2)}</td>
+            <td style="text-align:right; white-space: nowrap;">${item.total_price.toFixed(2)}</td>
             ${imageCellHtml}
           </tr>
         `;
@@ -551,9 +551,9 @@ export const generatePDFBlob = async (
           .quotation-title { text-align: center; font-size: 16pt; font-weight: 800; margin-bottom: 20px; color: #1e293b; text-transform: uppercase; }
           .intro { margin-bottom: 20px; font-size: 10pt; padding: 0 15px; }
           .equipment-title { font-size: 12pt; font-weight: bold; margin-bottom: 15px; color: #334155; }
-          table.equipment-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; }
-          .equipment-table th, .equipment-table td { border: 1px solid #cbd5e1; padding: 10px 8px; text-align: left; font-size: 9.5pt; vertical-align: top; }
-          .equipment-table th { background-color: #334155; font-weight: bold; color: #ffffff; text-transform: uppercase; font-size: 8.5pt; letter-spacing: 0.5px; }
+          table.equipment-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; table-layout: auto; }
+          .equipment-table th, .equipment-table td { border: 1px solid #cbd5e1; padding: 6px 4px; text-align: center; font-size: 8pt; vertical-align: top; }
+          .equipment-table th { background-color: #334155; font-weight: bold; color: #ffffff; text-transform: uppercase; font-size: 7.5pt; letter-spacing: 0.5px; }
           .equipment-table tbody tr:nth-child(even) { background-color: #f8fafc; }
           .equipment-table tbody tr:last-child { font-weight: bold; background-color: #e2e8f0; color: #1e293b; }
           .terms { margin-bottom: 25px; page-break-inside: avoid; }

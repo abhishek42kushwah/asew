@@ -219,33 +219,44 @@ const QuotationForm = () => {
       Term_Payment: header.Term_Payment || prev.Term_Payment,
       Term_Delivery: header.Term_Delivery || prev.Term_Delivery,
       Term_Warranty: header.Term_Warranty || prev.Term_Warranty,
-      labEquipment: items.map((item, idx) => ({
-        id: Date.now() + idx,
-        item_name: (
-          item.item_name ||
-          item.Item_Name ||
-          item.ITEM_NAME ||
-          ""
-        ).trim(),
-        specifications: item.specifications || item.SPECIFICATIONS || "",
-        qty: Number(item.qty || item.Qty || item.QTY || 1),
-        unit_price: Number(
+      labEquipment: items.map((item, idx) => {
+        const qty = Number(item.qty || item.Qty || item.QTY || 1);
+        const unit_price = Number(
           item.unit_price || item.Unit_Price || item.unitPrice || 0,
-        ),
-        total_price: Number(item.total_price || item.Total_Price || 0),
-        hsn: item.hsn || item.HSN_Code || item.HSN_CODE || "",
-        make: item.make || item.Make || item.MAKE || "",
-        nabl: item.nabl || item.NABL || "No",
-        discount_percent: Number(
+        );
+        const discount_percent = Number(
           item.discount_percent ||
             item.Item_Discount ||
             item.Discount_Percent ||
             0,
-        ),
-        gst_percent: Number(item.gst_percent || item.GST_Percent || 18),
-        gst_amount: Number(item.gst_amount || item.GST_Amount || 0),
-        image: null,
-      })),
+        );
+        const gst_percent = Number(item.gst_percent || item.GST_Percent || 18);
+        
+        const taxable = qty * unit_price * (1 - discount_percent / 100);
+        const calc_gst_amount = taxable * (gst_percent / 100);
+        const calc_total_price = taxable + calc_gst_amount;
+
+        return {
+          id: Date.now() + idx,
+          item_name: (
+            item.item_name ||
+            item.Item_Name ||
+            item.ITEM_NAME ||
+            ""
+          ).trim(),
+          specifications: item.specifications || item.SPECIFICATIONS || "",
+          qty,
+          unit_price,
+          total_price: calc_total_price,
+          hsn: item.hsn || item.HSN_Code || item.HSN_CODE || "",
+          make: item.make || item.Make || item.MAKE || "",
+          nabl: item.nabl || item.NABL || "No",
+          discount_percent,
+          gst_percent,
+          gst_amount: calc_gst_amount,
+          image: null,
+        };
+      }),
     }));
 
     const hasHSN = items.some((i) => i.hsn || i.HSN_Code || i.HSN_CODE);
@@ -548,31 +559,42 @@ const QuotationForm = () => {
           Term_Payment: header.Term_Payment || prev.Term_Payment,
           Term_Delivery: header.Term_Delivery || prev.Term_Delivery,
           Term_Warranty: header.Term_Warranty || prev.Term_Warranty,
-          labEquipment: items.map((item, idx) => ({
-            id: Date.now() + idx,
-            item_name: (
-              item.item_name ||
-              item.Item_Name ||
-              item.ITEM_NAME ||
-              ""
-            ).trim(),
-            specifications: item.specifications || item.SPECIFICATIONS || "",
-            qty: Number(item.qty || item.Qty || item.QTY || 1),
-            unit_price: Number(item.unit_price || item.Unit_Price || 0),
-            total_price: Number(item.total_price || item.Total_Price || 0),
-            hsn: item.hsn || item.HSN_Code || item.HSN_CODE || "",
-            make: item.make || item.Make || item.MAKE || "",
-            nabl: item.nabl || item.NABL || "",
-            discount_percent: Number(
+          labEquipment: items.map((item, idx) => {
+            const qty = Number(item.qty || item.Qty || item.QTY || 1);
+            const unit_price = Number(item.unit_price || item.Unit_Price || item.unitPrice || 0);
+            const discount_percent = Number(
               item.discount_percent ||
                 item.Item_Discount ||
                 item.Discount_Percent ||
                 0,
-            ),
-            gst_percent: Number(item.gst_percent || item.GST_Percent || 18),
-            gst_amount: Number(item.gst_amount || item.GST_Amount || 0),
-            image: null,
-          })),
+            );
+            const gst_percent = Number(item.gst_percent || item.GST_Percent || 18);
+            
+            const taxable = qty * unit_price * (1 - discount_percent / 100);
+            const calc_gst_amount = taxable * (gst_percent / 100);
+            const calc_total_price = taxable + calc_gst_amount;
+
+            return {
+              id: Date.now() + idx,
+              item_name: (
+                item.item_name ||
+                item.Item_Name ||
+                item.ITEM_NAME ||
+                ""
+              ).trim(),
+              specifications: item.specifications || item.SPECIFICATIONS || "",
+              qty,
+              unit_price,
+              total_price: calc_total_price,
+              hsn: item.hsn || item.HSN_Code || item.HSN_CODE || "",
+              make: item.make || item.Make || item.MAKE || "",
+              nabl: item.nabl || item.NABL || "",
+              discount_percent,
+              gst_percent,
+              gst_amount: calc_gst_amount,
+              image: null,
+            };
+          }),
         }));
 
         const hasHSN = items.some((i) => i.hsn || i.HSN_Code || i.HSN_CODE);
