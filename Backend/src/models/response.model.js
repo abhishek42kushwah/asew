@@ -22,12 +22,9 @@ const createResponseSheet = async () => {
       "Subtotal",
       "Image_URL",
       "Discount",
-      "Discount_Type",
       "GST",
       "Freight_Charges",
-      "Freight_Type",
       "Packaging_Charges",
-      "Packaging_Type",
       "Total_Amount",
       "Generated_PDF",
       "ITEMS",
@@ -42,6 +39,9 @@ const createResponseSheet = async () => {
       "Item_Discount",
       "Term_Payment",
       "NABL",
+      "Discount_Type",
+      "Freight_Type",
+      "Packaging_Type",
     ],
   ];
 
