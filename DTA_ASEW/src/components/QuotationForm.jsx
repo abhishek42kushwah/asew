@@ -193,6 +193,29 @@ const QuotationForm = () => {
 
   const [isSearching, setIsSearching] = useState(false);
 
+  // Helper to format date for HTML input (YYYY-MM-DD)
+  const formatDateForInput = (dateStr) => {
+    if (!dateStr) return "";
+    // If it's already YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+    
+    // If it's DD-MM-YYYY
+    const parts = dateStr.split("-");
+    if (parts.length === 3 && parts[0].length === 2 && parts[2].length === 4) {
+      return `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+    
+    // Fallback try to parse and format
+    try {
+      const d = new Date(dateStr);
+      if (!isNaN(d.getTime())) {
+        return d.toISOString().split("T")[0];
+      }
+    } catch (e) {}
+    
+    return dateStr;
+  };
+
   // Helper to populate form from a found quotation record
   const populateFormFromRecord = (found) => {
     const header = found.header || found;
@@ -200,10 +223,12 @@ const QuotationForm = () => {
 
     setValues((prev) => ({
       ...prev,
+      Date: formatDateForInput(header.Date || header.date || prev.Date),
       Customer_Name: header.Customer_Name || "",
       Buyer_Address: header.Buyer_Address || "",
       Delivery_Address: header.Delivery_Address || "",
       GSTIN_UIN: header.GSTIN_UIN || "",
+      PAN_No: header.PAN_No || "",
       Contact_Person: header.Contact_Person || "",
       Email_Address: header.Email_Address || "",
       Contact_Mobile: header.Contact_Mobile || "",
@@ -539,6 +564,7 @@ const QuotationForm = () => {
 
         setValues((prev) => ({
           ...prev,
+          Date: formatDateForInput(header.Date || header.date || prev.Date),
           Customer_Name: header.Customer_Name || "",
           Buyer_Address: header.Buyer_Address || "",
           Delivery_Address: header.Delivery_Address || "",
