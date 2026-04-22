@@ -23,15 +23,13 @@ export const fetchResponses = createAsyncThunk(
 
 export const createResponse = createAsyncThunk(
   "response/createResponse",
-  async (responseData, { rejectWithValue, dispatch }) => {
+  async (responseData, { rejectWithValue }) => {
     try {
       const response = await axios.post(API_URL, responseData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
       });
-      // Re-fetch responses so the Redux store has the latest data (needed for number generation)
-      dispatch(fetchResponses());
       return response.data;
     } catch (error) {
       return rejectWithValue(

@@ -2,6 +2,17 @@ const db = require("../config/db.config");
 
 const SHEET_NAME = "Customer_Master";
 
+// --- CACHE SETUP ---
+let cachedCustomers = null;
+let lastCustomersFetch = 0;
+const CUSTOMERS_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+const clearCustomersCache = () => {
+  cachedCustomers = null;
+  lastCustomersFetch = 0;
+};
+// -------------------
+
 /**
  * CREATE CUSTOMER
  */
@@ -30,6 +41,8 @@ exports.createCustomer = async (req, res) => {
       Delivery_Address,
     });
 
+    clearCustomersCache();
+
     res.status(201).json({
       message: "Customer created successfully",
     });
@@ -48,18 +61,22 @@ exports.createCustomer = async (req, res) => {
 exports.getCustomers = async (req, res) => {
   try {
     const { name } = req.query;
+    const now = Date.now();
 
-    let customers;
+    let allCustomers = cachedCustomers;
+    if (!allCustomers || (now - lastCustomersFetch >= CUSTOMERS_TTL_MS)) {
+      allCustomers = await db.getAll(SHEET_NAME);
+      cachedCustomers = allCustomers;
+      lastCustomersFetch = now;
+    }
 
     if (name) {
       // Search by name
-      customers = await db.find(SHEET_NAME, "Customer_Name", name);
-    } else {
-      // Get all customers
-      customers = await db.getAll(SHEET_NAME);
+      const customers = allCustomers.filter((row) => row.Customer_Name == name);
+      return res.json(customers);
     }
 
-    res.json(customers);
+    res.json(allCustomers);
   } catch (err) {
     console.error(err);
 
@@ -90,6 +107,8 @@ exports.updateCustomer = async (req, res) => {
       },
       "Customer_Name",
     );
+
+    clearCustomersCache();
 
     res.json({
       message: "Customer updated successfully",

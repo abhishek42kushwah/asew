@@ -1,6 +1,18 @@
 const db = require("../config/db.config");
+const { invalidateItemMasterCache } = require("../utils/quotationCache");
 
 const SHEET_NAME = "Item_Master";
+
+// --- CACHE SETUP ---
+let cachedItems = null;
+let lastItemsFetch = 0;
+const ITEMS_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+const clearItemsCache = () => {
+  cachedItems = null;
+  lastItemsFetch = 0;
+};
+// -------------------
 
 exports.createItem = async (req, res) => {
   try {
@@ -42,6 +54,9 @@ exports.createItem = async (req, res) => {
       NABL: NABL || "",
     });
 
+    invalidateItemMasterCache();
+    clearItemsCache();
+
     res.status(201).json({
       message: "Item created successfully",
       item_code: itemCode,
@@ -57,7 +72,20 @@ exports.createItem = async (req, res) => {
 exports.getItems = async (req, res) => {
   try {
     const { limit } = req.query;
-    const items = limit ? await db.getTail(SHEET_NAME, parseInt(limit)) : await db.getAll(SHEET_NAME);
+
+    if (limit) {
+      const items = await db.getTail(SHEET_NAME, parseInt(limit));
+      return res.json(items);
+    }
+
+    const now = Date.now();
+    if (cachedItems && (now - lastItemsFetch < ITEMS_TTL_MS)) {
+      return res.json(cachedItems);
+    }
+
+    const items = await db.getAll(SHEET_NAME);
+    cachedItems = items;
+    lastItemsFetch = now;
 
     res.json(items);
   } catch (err) {
@@ -88,6 +116,9 @@ exports.updateItem = async (req, res) => {
       },
       "ITEM_NAME",
     );
+
+    invalidateItemMasterCache();
+    clearItemsCache();
 
     res.json({
       message: "Item updated successfully",
@@ -128,6 +159,9 @@ exports.bulkUpdateItems = async (req, res) => {
       "ITEM_NAME",
       bulkItems,
     );
+
+    invalidateItemMasterCache();
+    clearItemsCache();
 
     res.json({
       message: `${result.updated}/${result.total} items updated`,

@@ -315,36 +315,24 @@ const QuotationForm = () => {
       // 1. Try the saves (drafts) endpoint first
       try {
         const saveRes = await axios.get(
-          `${API_BASE_URL}/api/save?quotationNo=${encodeURIComponent(searchNo)}`,
+          `${API_BASE_URL}/api/quotation/lookup?quotationNo=${encodeURIComponent(searchNo)}`,
         );
-        const record = saveRes.data?.data?.[0];
+        const record = saveRes.data?.data;
         if (record) {
           populateFormFromRecord(record);
           toast.success("Quotation found and loaded!");
           return;
         }
+        toast.error(`Quotation "${searchNo}" not found`);
+        return;
       } catch (saveErr) {
         // 404 means not in saves — continue to responses
-        if (saveErr.response?.status !== 404) throw saveErr;
-      }
-
-      // 2. Try the responses (submitted) endpoint
-      try {
-        const respRes = await axios.get(
-          `${API_BASE_URL}/api/response?quotationNo=${encodeURIComponent(searchNo)}`,
-        );
-        const record = respRes.data?.data?.[0];
-        if (record) {
-          populateFormFromRecord(record);
-          toast.success("Quotation found and loaded!");
+        if (saveErr.response?.status === 404) {
+          toast.error(`Quotation "${searchNo}" not found`);
           return;
         }
-      } catch (respErr) {
-        if (respErr.response?.status !== 404) throw respErr;
+        throw saveErr;
       }
-
-      // Not found in either
-      toast.error(`Quotation "${searchNo}" not found`);
     } catch (err) {
       console.error("[Search] Unexpected error:", err);
       toast.error("Error searching quotation. Please try again.");
@@ -554,9 +542,9 @@ const QuotationForm = () => {
     try {
       // Fetch directly from backend instead of searching in large Redux state
       const respRes = await axios.get(
-        `${API_BASE_URL}/api/response?quotationNo=${encodeURIComponent(searchNo)}`,
+        `${API_BASE_URL}/api/quotation/lookup?quotationNo=${encodeURIComponent(searchNo)}`,
       );
-      const found = respRes.data?.data?.[0];
+      const found = respRes.data?.data;
 
       if (found) {
         const header = found.header || found;
@@ -646,11 +634,15 @@ const QuotationForm = () => {
         setShowCopyModal(false);
         setCopyQuotationNo("");
       } else {
-        toast.error(`Quotation "${searchNo}" not found in responses`);
+        toast.error(`Quotation "${searchNo}" not found`);
       }
     } catch (err) {
-      console.error("[CopyOld] Error:", err);
-      toast.error("Error fetching quotation details");
+      if (err.response?.status === 404) {
+        toast.error(`Quotation "${searchNo}" not found`);
+      } else {
+        console.error("[CopyOld] Error:", err);
+        toast.error("Error fetching quotation details");
+      }
     } finally {
       setCopyLoading(false);
     }

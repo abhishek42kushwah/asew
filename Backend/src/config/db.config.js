@@ -2,95 +2,163 @@ require("dotenv").config();
 const sheets = require("./googleSheet");
 
 const SPREADSHEET_ID = process.env.SPREADSHEET_ID;
+const headerCache = new Map();
+const sheetMetadataCache = new Map();
 
-/**
- * Normalize helper
- */
 const normalize = (s) =>
   s?.toString().trim().replace(/\s+/g, " ").toLowerCase();
 
-/**
- * ✅ INSERT BY HEADER NAME
- */
-const insertByHeader = async (sheetName, dataObject) => {
-  const headerRes = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!1:1`,
-  });
+const normalizeHeader = (s) =>
+  s?.toString().toLowerCase().replace(/[\s_-]/g, "") || "";
 
-  const rawHeaders = headerRes.data.values[0].map((h) => h.trim());
-  
-  const row = rawHeaders.map((header) => dataObject[header] ?? "");
-  
-  // Explicitly find the next row instead of relying on append
-  const allRowsRes = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A:A`,
-  });
-  const nextRow = (allRowsRes.data.values ? allRowsRes.data.values.length : 0) + 1;
-
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A${nextRow}`,
-    valueInputOption: "USER_ENTERED",
-    requestBody: { values: [row] },
-  });
-};
-
-/**
- * ✅ INSERT MULTIPLE BY HEADER NAME
- */
-const insertMultipleByHeader = async (sheetName, dataObjects) => {
-  if (!dataObjects || dataObjects.length === 0) return;
-
-  const headerRes = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!1:1`,
-  });
-
-  const rawHeaders = headerRes.data.values[0].map((h) => h.trim());
-
-  const rows = dataObjects.map((dataObject) => {
-    return rawHeaders.map((header) => dataObject[header] ?? "");
-  });
-
-  // Explicitly find the next row instead of relying on append
-  const allRowsRes = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A:A`,
-  });
-  const nextRow = (allRowsRes.data.values ? allRowsRes.data.values.length : 0) + 1;
-
-  await sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A${nextRow}`,
-    valueInputOption: "USER_ENTERED",
-    requestBody: { values: rows },
-  });
-};
-
-/**
- * GET ALL ROWS
- */
-const getAll = async (sheetName) => {
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A:ZZ`,
-  });
-
-  const [headers, ...rows] = res.data.values || [];
-
-  return rows.map((row) =>
+const mapRows = (headers, rows = []) =>
+  rows.map((row) =>
     headers.reduce((obj, key, i) => {
-      obj[key] = row[i] !== undefined && row[i] !== null ? row[i].toString().trim() : null;
+      obj[key] =
+        row[i] !== undefined && row[i] !== null ? row[i].toString().trim() : null;
       return obj;
     }, {}),
   );
+
+const parseUpdatedRange = (updatedRange) => {
+  const match = updatedRange?.match(/![A-Z]+(\d+)(?::[A-Z]+(\d+))?$/i);
+
+  if (!match) {
+    return {
+      updatedRange,
+      startRow: null,
+      endRow: null,
+      updatedRows: 0,
+    };
+  }
+
+  const startRow = parseInt(match[1], 10);
+  const endRow = parseInt(match[2] || match[1], 10);
+
+  return {
+    updatedRange,
+    startRow,
+    endRow,
+    updatedRows: endRow - startRow + 1,
+  };
 };
 
-/**
- * GET TAIL ROWS (Last N rows)
- */
+const getHeaders = async (sheetName, { forceRefresh = false } = {}) => {
+  if (!forceRefresh && headerCache.has(sheetName)) {
+    return headerCache.get(sheetName);
+  }
+
+  const headerRes = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!1:1`,
+  });
+
+  const headers = (headerRes.data.values?.[0] || []).map((header) =>
+    header.toString().trim(),
+  );
+
+  headerCache.set(sheetName, headers);
+  return headers;
+};
+
+const getSheetMetadata = async (sheetName, { forceRefresh = false } = {}) => {
+  if (!forceRefresh && sheetMetadataCache.has(sheetName)) {
+    return sheetMetadataCache.get(sheetName);
+  }
+
+  const spreadsheetRes = await sheets.spreadsheets.get({
+    spreadsheetId: SPREADSHEET_ID,
+  });
+
+  const sheet = spreadsheetRes.data.sheets.find(
+    (candidate) =>
+      candidate.properties.title.toLowerCase().trim() ===
+      sheetName.toLowerCase().trim(),
+  );
+
+  if (!sheet) {
+    throw new Error(`Sheet "${sheetName}" not found`);
+  }
+
+  const metadata = {
+    sheetId: sheet.properties.sheetId,
+    title: sheet.properties.title,
+  };
+
+  sheetMetadataCache.set(sheetName, metadata);
+  return metadata;
+};
+
+const insertByHeader = async (sheetName, dataObject) => {
+  const rawHeaders = await getHeaders(sheetName);
+  const row = rawHeaders.map((header) => dataObject[header] ?? "");
+
+  const response = await sheets.spreadsheets.values.append({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!A:ZZ`,
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: { values: [row] },
+  });
+
+  return parseUpdatedRange(response.data.updates?.updatedRange);
+};
+
+const insertMultipleByHeader = async (sheetName, dataObjects) => {
+  if (!dataObjects || dataObjects.length === 0) {
+    return {
+      updatedRange: null,
+      startRow: null,
+      endRow: null,
+      updatedRows: 0,
+    };
+  }
+
+  const rawHeaders = await getHeaders(sheetName);
+  const rows = dataObjects.map((dataObject) =>
+    rawHeaders.map((header) => dataObject[header] ?? ""),
+  );
+
+  const response = await sheets.spreadsheets.values.append({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!A:ZZ`,
+    valueInputOption: "USER_ENTERED",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: { values: rows },
+  });
+
+  return parseUpdatedRange(response.data.updates?.updatedRange);
+};
+
+const getAll = async (sheetName) => {
+  const headers = await getHeaders(sheetName);
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!A2:ZZ`,
+  });
+
+  return mapRows(headers, res.data.values || []);
+};
+
+const getAllWithRowNumbers = async (sheetName) => {
+  const headers = await getHeaders(sheetName);
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!A2:ZZ`,
+  });
+
+  return (res.data.values || []).map((row, index) => ({
+    rowNumber: index + 2,
+    data: headers.reduce((obj, key, cellIndex) => {
+      obj[key] =
+        row[cellIndex] !== undefined && row[cellIndex] !== null
+          ? row[cellIndex].toString().trim()
+          : null;
+      return obj;
+    }, {}),
+  }));
+};
+
 const getTail = async (sheetName, count = 100) => {
   const allRowsRes = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
@@ -98,37 +166,19 @@ const getTail = async (sheetName, count = 100) => {
   });
 
   const totalRows = allRowsRes.data.values ? allRowsRes.data.values.length : 0;
-  if (totalRows <= 1) return []; // Only header or empty
+  if (totalRows <= 1) return [];
 
   const startRow = Math.max(2, totalRows - count + 1);
   const endRow = totalRows;
-
-  // Fetch headers
-  const headerRes = await sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!1:1`,
-  });
-  const headers = headerRes.data.values[0];
-
-  // Fetch tail data
+  const headers = await getHeaders(sheetName);
   const dataRes = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     range: `${sheetName}!A${startRow}:ZZ${endRow}`,
   });
 
-  const rows = dataRes.data.values || [];
-
-  return rows.map((row) =>
-    headers.reduce((obj, key, i) => {
-      obj[key] = row[i] !== undefined && row[i] !== null ? row[i].toString().trim() : null;
-      return obj;
-    }, {}),
-  );
+  return mapRows(headers, dataRes.data.values || []);
 };
 
-/**
- * WHERE column = value
- */
 const find = async (sheetName, column, value) => {
   const rows = await getAll(sheetName);
   return rows.filter((row) => row[column] == value);
@@ -148,9 +198,6 @@ const clearSheet = async (sheetName) => {
   return true;
 };
 
-/**
- * ✅ UPDATE BY ID (Column A)
- */
 const updateById = async (sheetName, id, updatedData, idColumn = null) => {
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
@@ -163,16 +210,12 @@ const updateById = async (sheetName, id, updatedData, idColumn = null) => {
   const rawHeaders = rows[0];
   let searchColIndex = 0;
 
-  // If idColumn specified, find its index in headers (robust match)
-  const norm = (s) =>
-    s
-      ?.toString()
-      .toLowerCase()
-      .replace(/[\s_-]/g, "") || "";
-
   if (idColumn) {
-    const normalizedIdCol = norm(idColumn);
-    searchColIndex = rawHeaders.findIndex((h) => norm(h) === normalizedIdCol);
+    const normalizedIdCol = normalizeHeader(idColumn);
+    searchColIndex = rawHeaders.findIndex(
+      (header) => normalizeHeader(header) === normalizedIdCol,
+    );
+
     if (searchColIndex === -1) {
       console.warn(
         `[db] idColumn "${idColumn}" not found in headers, falling back to Column A`,
@@ -181,30 +224,22 @@ const updateById = async (sheetName, id, updatedData, idColumn = null) => {
     }
   }
 
-  // ✅ Find row index where searchColIndex column = id
   const targetId = String(id).trim();
   const rowIndex = rows.findIndex(
-    (r, i) =>
-      i !== 0 &&
-      r[searchColIndex] &&
-      String(r[searchColIndex]).trim() === targetId,
+    (row, index) =>
+      index !== 0 &&
+      row[searchColIndex] &&
+      String(row[searchColIndex]).trim() === targetId,
   );
 
   if (rowIndex === -1) {
-    console.error(
-      `[db] Row not found for id: "${id}" in column index ${searchColIndex}`,
-    );
     throw new Error(`Row with ID "${id}" not found in sheet "${sheetName}".`);
   }
 
-  // ✅ Build updated row correctly
-  const updatedRow = rawHeaders.map((header, colIndex) => {
-    return updatedData[header] !== undefined
-      ? updatedData[header]
-      : rows[rowIndex][colIndex] || "";
-  });
+  const updatedRow = rawHeaders.map((header, colIndex) =>
+    updatedData[header] !== undefined ? updatedData[header] : rows[rowIndex][colIndex] || "",
+  );
 
-  // ✅ Update Google Sheet row
   await sheets.spreadsheets.values.update({
     spreadsheetId: SPREADSHEET_ID,
     range: `${sheetName}!A${rowIndex + 1}`,
@@ -217,10 +252,6 @@ const updateById = async (sheetName, id, updatedData, idColumn = null) => {
   return true;
 };
 
-/**
- * ✅ BULK UPDATE BY COLUMN — single read + single batchUpdate
- * items: array of { matchValue, data } where matchValue is the value to match in matchColumn
- */
 const bulkUpdateByColumn = async (sheetName, matchColumn, items) => {
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
@@ -231,30 +262,27 @@ const bulkUpdateByColumn = async (sheetName, matchColumn, items) => {
   if (!rows || rows.length === 0) throw new Error("Sheet empty");
 
   const rawHeaders = rows[0];
+  const normalizedMatchCol = normalizeHeader(matchColumn);
+  let matchColIndex = rawHeaders.findIndex(
+    (header) => normalizeHeader(header) === normalizedMatchCol,
+  );
 
-  // Find column index for matching
-  const norm = (s) => s?.toString().toLowerCase().replace(/[\s_-]/g, "") || "";
-  const normalizedMatchCol = norm(matchColumn);
-  let matchColIndex = rawHeaders.findIndex((h) => norm(h) === normalizedMatchCol);
   if (matchColIndex === -1) matchColIndex = 0;
 
-  // Build lookup of items to update
   const updateMap = new Map();
   items.forEach((item) => {
     updateMap.set(String(item.matchValue).trim(), item.data);
   });
 
-  // Find all matching rows and build batch data
   const batchData = [];
   for (let i = 1; i < rows.length; i++) {
     const cellValue = String(rows[i][matchColIndex] || "").trim();
     if (updateMap.has(cellValue)) {
       const updatedData = updateMap.get(cellValue);
-      const updatedRow = rawHeaders.map((header, colIndex) => {
-        return updatedData[header] !== undefined
-          ? updatedData[header]
-          : rows[i][colIndex] || "";
-      });
+      const updatedRow = rawHeaders.map((header, colIndex) =>
+        updatedData[header] !== undefined ? updatedData[header] : rows[i][colIndex] || "",
+      );
+
       batchData.push({
         range: `${sheetName}!A${i + 1}`,
         values: [updatedRow],
@@ -275,21 +303,36 @@ const bulkUpdateByColumn = async (sheetName, matchColumn, items) => {
   return { updated: batchData.length, total: items.length };
 };
 
-/**
- * ✅ DELETE ROWS BY COLUMN
- */
-const deleteRowsByColumn = async (sheetName, columnName, value) => {
-  const spreadsheetRes = await sheets.spreadsheets.get({
+const deleteRowRange = async (sheetName, startRow, endRow = startRow) => {
+  if (!startRow || !endRow || endRow < startRow) {
+    return 0;
+  }
+
+  const metadata = await getSheetMetadata(sheetName);
+
+  await sheets.spreadsheets.batchUpdate({
     spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId: metadata.sheetId,
+              dimension: "ROWS",
+              startIndex: startRow - 1,
+              endIndex: endRow,
+            },
+          },
+        },
+      ],
+    },
   });
 
-  const sheet = spreadsheetRes.data.sheets.find(
-    (s) => s.properties.title.toLowerCase().trim() === sheetName.toLowerCase().trim(),
-  );
-  if (!sheet) throw new Error(`Sheet "${sheetName}" not found`);
+  return endRow - startRow + 1;
+};
 
-  const sheetId = sheet.properties.sheetId;
-
+const deleteRowsByColumn = async (sheetName, columnName, value) => {
+  const metadata = await getSheetMetadata(sheetName);
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: SPREADSHEET_ID,
     range: `${sheetName}!A:ZZ`,
@@ -299,11 +342,11 @@ const deleteRowsByColumn = async (sheetName, columnName, value) => {
   if (!rows || rows.length === 0) return 0;
 
   const rawHeaders = rows[0];
-  const norm = (s) => s?.toString().toLowerCase().replace(/[\s_-]/g, "") || "";
-  const normalizedMatchCol = norm(columnName);
+  const normalizedMatchCol = normalizeHeader(columnName);
   let matchColIndex = rawHeaders.findIndex(
-    (h) => norm(h) === normalizedMatchCol,
+    (header) => normalizeHeader(header) === normalizedMatchCol,
   );
+
   if (matchColIndex === -1) matchColIndex = 0;
 
   const targetValue = String(value).trim();
@@ -312,19 +355,30 @@ const deleteRowsByColumn = async (sheetName, columnName, value) => {
   for (let i = 1; i < rows.length; i++) {
     const cellValue = String(rows[i][matchColIndex] || "").trim();
     if (cellValue === targetValue) {
-      indicesToDelete.push(i); // 0-based index
+      indicesToDelete.push(i);
     }
   }
 
   if (indicesToDelete.length === 0) return 0;
 
-  // IMPORTANT: Delete in reverse order to keep indices valid
+  const areContiguous = indicesToDelete.every(
+    (rowIndex, index) => index === 0 || rowIndex === indicesToDelete[index - 1] + 1,
+  );
+
+  if (areContiguous) {
+    return deleteRowRange(
+      sheetName,
+      indicesToDelete[0] + 1,
+      indicesToDelete[indicesToDelete.length - 1] + 1,
+    );
+  }
+
   const requests = indicesToDelete
     .sort((a, b) => b - a)
     .map((index) => ({
       deleteDimension: {
         range: {
-          sheetId: sheetId,
+          sheetId: metadata.sheetId,
           dimension: "ROWS",
           startIndex: index,
           endIndex: index + 1,
@@ -335,7 +389,7 @@ const deleteRowsByColumn = async (sheetName, columnName, value) => {
   await sheets.spreadsheets.batchUpdate({
     spreadsheetId: SPREADSHEET_ID,
     requestBody: {
-      requests: requests,
+      requests,
     },
   });
 
@@ -343,14 +397,18 @@ const deleteRowsByColumn = async (sheetName, columnName, value) => {
 };
 
 module.exports = {
-  insertByHeader,
-  getAll,
-  find,
-  updateById,
-  findById,
-  clearSheet,
-  insertMultipleByHeader,
   bulkUpdateByColumn,
+  clearSheet,
+  deleteRowRange,
   deleteRowsByColumn,
+  find,
+  findById,
+  getAll,
+  getAllWithRowNumbers,
+  getHeaders,
   getTail,
+  insertByHeader,
+  insertMultipleByHeader,
+  normalize,
+  updateById,
 };
