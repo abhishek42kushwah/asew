@@ -500,24 +500,27 @@ const QuotationForm = () => {
     let total = subtotal + totalGST;
 
     // Discount
+    const discountVal = parseFloat(values.Discount) || 0;
     if (values.DiscountType === "%") {
-      total -= subtotal * (values.Discount / 100);
+      total -= subtotal * (discountVal / 100);
     } else {
-      total -= Number(values.Discount);
+      total -= discountVal;
     }
 
     // Freight
+    const freightVal = parseFloat(values.Freight_Charges) || 0;
     if (values.FreightType === "%") {
-      total += subtotal * (Number(values.Freight_Charges) / 100);
+      total += subtotal * (freightVal / 100);
     } else {
-      total += Number(values.Freight_Charges);
+      total += freightVal;
     }
 
     // Packaging
+    const packagingVal = parseFloat(values.Packaging_Charges) || 0;
     if (values.PackagingType === "%") {
-      total += subtotal * (Number(values.Packaging_Charges) / 100);
+      total += subtotal * (packagingVal / 100);
     } else {
-      total += Number(values.Packaging_Charges);
+      total += packagingVal;
     }
 
     return total;
@@ -1458,7 +1461,7 @@ const QuotationForm = () => {
                     }
                     className="p-3 text-right pr-4"
                   >
-                    <FaCalculator className="inline mr-2" /> Total
+                    <FaCalculator className="inline mr-2" /> Items Total
                   </td>
                   <td className="text-center">
                     {values.labEquipment.reduce(
@@ -1477,7 +1480,7 @@ const QuotationForm = () => {
                     </>
                   )}
                   <td className="text-center text-[#2ecc71]">
-                    {calculateGrandTotal().toFixed(2)}
+                    {values.labEquipment.reduce((sum, item) => sum + (Number(item.total_price) || 0), 0).toFixed(2)}
                   </td>
                   <td colSpan={2}></td>
                 </tr>

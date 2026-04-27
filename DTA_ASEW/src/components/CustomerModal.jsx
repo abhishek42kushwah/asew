@@ -1,3 +1,4 @@
+// Customer Modal Component
 import React from "react";
 import { useDispatch } from "react-redux";
 import { FaUser } from "react-icons/fa";

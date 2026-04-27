@@ -281,12 +281,12 @@ export const generateQuotationPDF = (
             <tbody>
               ${rowsHtml}
               <tr>
-                <td colspan="${baseColSpan}" style="text-align:right;"><strong>Total</strong></td>
+                <td colspan="${baseColSpan}" style="text-align:right;"><strong>Items Total</strong></td>
                 <td style="text-align:right;">${totalQty}</td>
                 <td></td> 
                 ${showFields.discount ? "<td></td>" : ""} 
                 ${showFields.gst ? "<td></td><td></td>" : ""}
-                <td style="text-align:right;">${totals.grandTotal.toFixed(2)}</td>
+                <td style="text-align:right;">${labEquipment.reduce((sum, item) => sum + (Number(item.total_price) || 0), 0).toFixed(2)}</td>
                 ${footerImageCellHtml}
               </tr>
             </tbody>
@@ -616,12 +616,12 @@ export const generatePDFBlob = async (
               <tbody>
                 ${rowsHtml}
                 <tr>
-                  <td colspan="${baseColSpan}" style="text-align:right;"><strong>Total</strong></td>
+                  <td colspan="${baseColSpan}" style="text-align:right;"><strong>Items Total</strong></td>
                 <td style="text-align:right;">${totalQty}</td>
                 <td></td> 
                 ${showFields.discount ? "<td></td>" : ""} 
                 ${showFields.gst ? "<td></td><td></td>" : ""}
-                <td style="text-align:right;">${totals.grandTotal.toFixed(2)}</td>
+                <td style="text-align:right;">${labEquipment.reduce((sum, item) => sum + (Number(item.total_price) || 0), 0).toFixed(2)}</td>
                 ${footerImageCellHtml}
               </tr>
               </tbody>
