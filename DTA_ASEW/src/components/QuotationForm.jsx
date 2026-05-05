@@ -1239,11 +1239,22 @@ const QuotationForm = () => {
                       <div className="flex flex-col">
                         <Select
                           options={itemOptions}
-                          value={itemOptions.find(
-                            (opt) =>
-                              opt.value === item.item_name ||
-                              opt.itemName === item.item_name,
-                          )}
+                          value={
+                            item.item_name
+                              ? itemOptions.find(
+                                  (opt) =>
+                                    opt.value === item.item_name ||
+                                    opt.itemName === item.item_name ||
+                                    opt.label === item.item_name ||
+                                    opt.label?.trim().toLowerCase() ===
+                                      item.item_name?.trim().toLowerCase(),
+                                ) || {
+                                  value: item.item_name,
+                                  label: item.item_name,
+                                  itemName: item.item_name,
+                                }
+                              : null
+                          }
                           onChange={(selected) =>
                             handleEquipmentChange(
                               index,
