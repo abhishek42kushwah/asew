@@ -116,9 +116,11 @@ const QuotationForm = () => {
       Freight_Charges: 0,
       FreightType: "Amount",
       Freight_Note: "",
+      Freight_GST_Percent: 18,
       Packaging_Charges: 0,
       PackagingType: "Amount",
       Packaging_Note: "",
+      Packaging_GST_Percent: 18,
       Term_Tax: "Extra, GST @ 18%",
       Term_Payment: "30% advance & balance at the time of dispatch",
       Term_Delivery: "1-2 weeks after receipt of your Purchase Order.",
@@ -211,7 +213,9 @@ const QuotationForm = () => {
       if (!isNaN(d.getTime())) {
         return d.toISOString().split("T")[0];
       }
-    } catch (e) {}
+    } catch {
+      // Fallback to returning original string
+    }
     
     return dateStr;
   };
@@ -237,9 +241,11 @@ const QuotationForm = () => {
       Freight_Charges: header.Freight_Charges || 0,
       FreightType: header.Freight_Type || header.FreightType || "Amount",
       Freight_Note: header.Freight_Note || "",
+      Freight_GST_Percent: header.Freight_GST_Percent || 18,
       Packaging_Charges: header.Packaging_Charges || 0,
       PackagingType: header.Packaging_Type || header.PackagingType || "Amount",
       Packaging_Note: header.Packaging_Note || "",
+      Packaging_GST_Percent: header.Packaging_GST_Percent || 18,
       Term_Tax: header.Term_Tax || prev.Term_Tax,
       Term_Payment: header.Term_Payment || prev.Term_Payment,
       Term_Delivery: header.Term_Delivery || prev.Term_Delivery,
@@ -491,7 +497,20 @@ const QuotationForm = () => {
   };
 
   const calculateTotalGST = () => {
-    return values.labEquipment.reduce((sum, item) => sum + (item.gst_amount || 0), 0);
+    let totalGST = values.labEquipment.reduce((sum, item) => sum + (item.gst_amount || 0), 0);
+    
+    // Freight GST
+    const freightVal = parseFloat(values.Freight_Charges) || 0;
+    const subtotal = calculateSubtotal();
+    const actualFreight = values.FreightType === "%" ? subtotal * (freightVal / 100) : freightVal;
+    const freightGST = actualFreight * (parseFloat(values.Freight_GST_Percent || 0) / 100);
+    
+    // Packaging GST
+    const packagingVal = parseFloat(values.Packaging_Charges) || 0;
+    const actualPackaging = values.PackagingType === "%" ? subtotal * (packagingVal / 100) : packagingVal;
+    const packagingGST = actualPackaging * (parseFloat(values.Packaging_GST_Percent || 0) / 100);
+    
+    return totalGST + freightGST + packagingGST;
   };
 
   const calculateGrandTotal = () => {
@@ -569,9 +588,11 @@ const QuotationForm = () => {
           Freight_Charges: header.Freight_Charges || 0,
           FreightType: header.FreightType || "Amount",
           Freight_Note: header.Freight_Note || "",
+          Freight_GST_Percent: header.Freight_GST_Percent || 18,
           Packaging_Charges: header.Packaging_Charges || 0,
-          PackagingType: header.PackagingType || "Amount",
+          PackagingType: header.Packaging_Type || "Amount",
           Packaging_Note: header.Packaging_Note || "",
+          Packaging_GST_Percent: header.Packaging_GST_Percent || 18,
           Term_Tax: header.Term_Tax || prev.Term_Tax,
           Term_Payment: header.Term_Payment || prev.Term_Payment,
           Term_Delivery: header.Term_Delivery || prev.Term_Delivery,
@@ -1570,6 +1591,22 @@ const QuotationForm = () => {
                   Calculated Amount: ₹{(calculateSubtotal() * (Number(values.Freight_Charges) / 100)).toFixed(2)}
                 </div>
               )}
+              <div className="flex items-center gap-2">
+                <div className="text-xs text-gray-500 font-semibold">GST %</div>
+                <input
+                  type="number"
+                  name="Freight_GST_Percent"
+                  value={values.Freight_GST_Percent}
+                  onChange={handleInputChange}
+                  placeholder="GST %"
+                  className="w-20 p-1 border border-gray-200 rounded text-xs focus:outline-none focus:border-[#2ecc71]"
+                />
+              </div>
+              {values.Freight_GST_Percent > 0 && (
+                <div className="text-xs text-[#2ecc71] -mt-2 font-medium">
+                  Freight GST: ₹{( (values.FreightType === "%" ? calculateSubtotal() * (Number(values.Freight_Charges) / 100) : Number(values.Freight_Charges)) * (Number(values.Freight_GST_Percent) / 100) ).toFixed(2)}
+                </div>
+              )}
               <input
                 type="text"
                 name="Freight_Note"
@@ -1602,9 +1639,20 @@ const QuotationForm = () => {
                   <option value="%">%</option>
                 </select>
               </div>
-              {values.PackagingType === "%" && (
-                <div className="text-xs text-[#2ecc71] -mt-1 font-medium">
-                  Calculated Amount: ₹{(calculateSubtotal() * (Number(values.Packaging_Charges) / 100)).toFixed(2)}
+              <div className="flex items-center gap-2">
+                <div className="text-xs text-gray-500 font-semibold">GST %</div>
+                <input
+                  type="number"
+                  name="Packaging_GST_Percent"
+                  value={values.Packaging_GST_Percent}
+                  onChange={handleInputChange}
+                  placeholder="GST %"
+                  className="w-20 p-1 border border-gray-200 rounded text-xs focus:outline-none focus:border-[#2ecc71]"
+                />
+              </div>
+              {values.Packaging_GST_Percent > 0 && (
+                <div className="text-xs text-[#2ecc71] -mt-2 font-medium">
+                  Packaging GST: ₹{( (values.PackagingType === "%" ? calculateSubtotal() * (Number(values.Packaging_Charges) / 100) : Number(values.Packaging_Charges)) * (Number(values.Packaging_GST_Percent) / 100) ).toFixed(2)}
                 </div>
               )}
               <input

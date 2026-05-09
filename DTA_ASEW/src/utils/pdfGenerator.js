@@ -140,6 +140,9 @@ export const generateQuotationPDF = (
     } else {
       freightDisplay = freightInput.toFixed(2);
     }
+    if (parseFloat(formData.Freight_GST_Percent) > 0) {
+      freightDisplay += ` + GST @ ${formData.Freight_GST_Percent}%`;
+    }
   }
   if (freightInput > 0 && freightNoteText) {
     freightDisplay += ` <span style="font-size:8pt;">(${freightNoteText})</span>`;
@@ -158,6 +161,9 @@ export const generateQuotationPDF = (
       packagingDisplay = packagingInput + "%";
     } else {
       packagingDisplay = packagingInput.toFixed(2);
+    }
+    if (parseFloat(formData.Packaging_GST_Percent) > 0) {
+      packagingDisplay += ` + GST @ ${formData.Packaging_GST_Percent}%`;
     }
   }
   if (packagingInput > 0 && packagingNoteText) {
@@ -481,6 +487,9 @@ export const generatePDFBlob = async (
         formData.FreightType === "%"
           ? freightInput + "%"
           : freightInput.toFixed(2);
+      if (parseFloat(formData.Freight_GST_Percent) > 0) {
+        freightDisplay += ` + GST @ ${formData.Freight_GST_Percent}%`;
+      }
     }
     if (freightInput > 0 && freightNoteText) {
       freightDisplay += ` <span style="font-size:8pt;">(${freightNoteText})</span>`;
@@ -498,6 +507,9 @@ export const generatePDFBlob = async (
         formData.PackagingType === "%"
           ? packagingInput + "%"
           : packagingInput.toFixed(2);
+      if (parseFloat(formData.Packaging_GST_Percent) > 0) {
+        packagingDisplay += ` + GST @ ${formData.Packaging_GST_Percent}%`;
+      }
     }
     if (packagingInput > 0 && packagingNoteText) {
       packagingDisplay += ` <span style="font-size:8pt;">(${packagingNoteText})</span>`;
