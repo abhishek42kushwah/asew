@@ -114,6 +114,7 @@ const buildQuotationRows = ({
       NABL: showFields.nabl
         ? item.nabl || data.NABL || master.NABL || ""
         : "",
+      Timestamp: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: false }),
     };
   });
 };

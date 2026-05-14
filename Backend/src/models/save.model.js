@@ -42,6 +42,7 @@ const createSaveSheet = async () => {
       "Discount_Type",
       "Freight_Type",
       "Packaging_Type",
+      "Timestamp",
     ],
   ];
 
