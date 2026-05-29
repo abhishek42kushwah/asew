@@ -7,8 +7,6 @@ const createItemMasterSheet = async () => {
 
 
 
-  
-
   const headers = [[
     "ITEM_NAME",
     "SPECIFICATIONS",
