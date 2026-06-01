@@ -254,16 +254,16 @@ const getItemMasterMap = async () => {
 };
 
 const getNextSaveQuotationNumber = async () => {
-  const [saveRows, responseRows] = await Promise.all([
-    db.getTail("save", 200),
-    db.getTail("response", 200),
+  const [saveState, responseState] = await Promise.all([
+    ensureSheetLoaded("save"),
+    ensureSheetLoaded("response"),
   ]);
 
   let maxSequence = SAVE_QUOTATION_MIN_SEQUENCE;
 
-  [saveRows, responseRows].forEach((rows) => {
-    rows.forEach((row) => {
-      const quotationNo = row.Quotation_No?.toString().trim();
+  [saveState, responseState].forEach((state) => {
+    state.byQuotationNo.forEach((entry) => {
+      const quotationNo = entry.quotationNo;
       if (!quotationNo || !quotationNo.startsWith(SAVE_QUOTATION_SERIES_PREFIX)) {
         return;
       }
