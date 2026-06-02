@@ -64,10 +64,28 @@ exports.createSave = async (req, res) => {
 
     let quotationNo = data.Quotation_No?.toString().trim();
 
+    // [DUP-DEBUG] Backend item count received
+    let receivedItemCount = 0;
+    try {
+      receivedItemCount = JSON.parse(data.ITEMS || "[]").length;
+    } catch {
+      receivedItemCount = -1;
+    }
+    console.log(
+      `[DUP-DEBUG][Backend] createSave Quotation_No=${quotationNo || "(new)"} received items=${receivedItemCount}`,
+    );
+
     if (!quotationNo) {
       quotationNo = await getNextSaveQuotationNumber();
     } else {
-      await deleteQuotationRows(SHEET_NAME, quotationNo);
+      const deleteResult = await deleteQuotationRows(SHEET_NAME, quotationNo);
+      // [DUP-DEBUG] How many existing rows were removed before re-inserting.
+      // If deleted=0 here but old rows exist in the sheet, the new rows will be
+      // appended after them -> item repetition.
+      console.log(
+        `[DUP-DEBUG][Backend] deleteQuotationRows(${quotationNo}) ->`,
+        deleteResult,
+      );
     }
 
     const rowsToInsert = buildQuotationRows({
@@ -79,6 +97,12 @@ exports.createSave = async (req, res) => {
     });
 
     const appendMetadata = await db.insertMultipleByHeader(SHEET_NAME, rowsToInsert);
+
+    // [DUP-DEBUG] Rows actually written to Sheets (count + appended row range)
+    console.log(
+      `[DUP-DEBUG][Backend] rows written to Sheets for ${quotationNo}: count=${rowsToInsert.length}`,
+      appendMetadata,
+    );
     await upsertQuotationEntry(SHEET_NAME, quotationNo, rowsToInsert, appendMetadata);
 
     res.status(201).json({

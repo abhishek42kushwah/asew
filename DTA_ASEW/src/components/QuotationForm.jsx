@@ -693,6 +693,12 @@ const QuotationForm = () => {
       return;
     }
 
+    // [DUP-DEBUG] Frontend item count before submit
+    console.log(
+      `[DUP-DEBUG][Frontend] Quotation_No=${values.Quotation_No} action=${actionType} ` +
+        `labEquipment=${values.labEquipment.length} validItems=${validItems.length}`,
+    );
+
     const loadingToastId = toast.loading("Processing quotation...");
     const data = new FormData();
 

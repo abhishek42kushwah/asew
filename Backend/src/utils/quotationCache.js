@@ -175,7 +175,23 @@ const deleteQuotationRows = async (sheetName, quotationNo) => {
   const entry = state.byQuotationNo.get(normalizedQuotationNo);
 
   if (!entry) {
-    return { deleted: 0, usedCache: false };
+    // The in-memory cache has no record of this quotation, but rows may still
+    // exist in the sheet (cold/stale cache, multi-worker process, external
+    // edit, or a prior failed delete). Skipping deletion here causes the new
+    // rows to be appended after the surviving old rows -> item repetition.
+    // Fall back to an authoritative scan of the sheet so deletion is never
+    // silently skipped.
+    const deleted = await db.deleteRowsByColumn(
+      sheetName,
+      "Quotation_No",
+      normalizedQuotationNo,
+    );
+
+    if (deleted > 0) {
+      invalidateSheetCache(sheetName);
+    }
+
+    return { deleted, usedCache: false };
   }
 
   if (entry.spans.length !== 1) {
