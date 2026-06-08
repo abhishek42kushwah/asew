@@ -766,8 +766,12 @@ const QuotationForm = () => {
       ).replace(/[^a-zA-Z0-9]/g, "_");
       const pdfFilename = `${sanitizedCustomerName}__${sanitizedQuotationNo}.pdf`;
 
+      const pdfFile = new File([pdfBlob], pdfFilename, {
+        type: "application/pdf",
+      });
+
       // Append PDF File for the API to upload to Drive
-      data.append("Generated_PDF", pdfBlob, pdfFilename);
+      data.append("Generated_PDF", pdfFile);
 
       // Automatically sync customer details to Customer Master
       if (values.Customer_Name) {
@@ -794,11 +798,12 @@ const QuotationForm = () => {
     } catch (err) {
       console.error("Processing failed:", err);
       toast.error(
-        "Failed to process quotation details. Proceeding without some optimizations.",
+        "Failed to generate quotation PDF. Please try again.",
         {
           id: loadingToastId,
         },
       );
+      return;
     }
 
     if (actionType === "save") {

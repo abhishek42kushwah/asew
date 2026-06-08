@@ -53,12 +53,71 @@ const resolveItemName = ({
   return resolvedItemName;
 };
 
+const getRowBatchKey = (row) => row.Timestamp?.toString().trim() || "";
+
+const selectLatestBatchRows = (quotationRows) => {
+  const timestampGroups = new Map();
+
+  quotationRows.forEach((row) => {
+    const batchKey = getRowBatchKey(row);
+    if (!batchKey) {
+      return;
+    }
+
+    if (!timestampGroups.has(batchKey)) {
+      timestampGroups.set(batchKey, []);
+    }
+
+    timestampGroups.get(batchKey).push(row);
+  });
+
+  if (timestampGroups.size === 0) {
+    return quotationRows;
+  }
+
+  const timestampedCount = Array.from(timestampGroups.values()).reduce(
+    (count, rows) => count + rows.length,
+    0,
+  );
+
+  if (timestampGroups.size === 1 && timestampedCount === quotationRows.length) {
+    return quotationRows;
+  }
+
+  let latestRows = quotationRows;
+  timestampGroups.forEach((rows) => {
+    latestRows = rows;
+  });
+
+  return latestRows;
+};
+
+const selectRowsForLatestBatches = (rows) => {
+  const rowsByQuotationNo = new Map();
+
+  rows.forEach((row) => {
+    const quotationNo = row?.Quotation_No;
+    if (!quotationNo) {
+      return;
+    }
+
+    if (!rowsByQuotationNo.has(quotationNo)) {
+      rowsByQuotationNo.set(quotationNo, []);
+    }
+
+    rowsByQuotationNo.get(quotationNo).push(row);
+  });
+
+  return Array.from(rowsByQuotationNo.values()).flatMap(selectLatestBatchRows);
+};
+
 const groupQuotationRows = (rows) => {
+  const rowsForGrouping = selectRowsForLatestBatches(rows);
   const grouped = {};
   const uniformItems = {};
   const rowCounts = {};
 
-  rows.forEach((row) => {
+  rowsForGrouping.forEach((row) => {
     if (!row?.Quotation_No) {
       return;
     }
@@ -72,7 +131,7 @@ const groupQuotationRows = (rows) => {
     }
   });
 
-  rows.forEach((row) => {
+  rowsForGrouping.forEach((row) => {
     if (!row?.Quotation_No) {
       return;
     }

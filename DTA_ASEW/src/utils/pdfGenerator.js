@@ -1,6 +1,87 @@
 /**
  * PDF Generator Utility for Quotation Form
  */
+import html2pdf from "html2pdf.js";
+import asewLogo from "../assets/asewlogo.jpg";
+
+const resolveAssetUrl = (assetUrl) => new URL(assetUrl, window.location.href).href;
+
+const readBlobAsDataUrl = (blob) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+
+const getEmbeddedLogoUrl = async () => {
+  const logoUrl = resolveAssetUrl(asewLogo);
+
+  try {
+    const response = await fetch(logoUrl);
+    if (!response.ok) {
+      throw new Error(`Logo request failed: ${response.status}`);
+    }
+    return await readBlobAsDataUrl(await response.blob());
+  } catch (error) {
+    console.warn("[pdfGenerator] Falling back to logo URL:", error.message);
+    return logoUrl;
+  }
+};
+
+const createPdfCaptureElement = (htmlContent) => {
+  const parsedDocument = new DOMParser().parseFromString(
+    htmlContent,
+    "text/html",
+  );
+  const element = document.createElement("div");
+
+  parsedDocument.head.querySelectorAll("style").forEach((style) => {
+    element.appendChild(style.cloneNode(true));
+  });
+
+  Array.from(parsedDocument.body.childNodes).forEach((node) => {
+    element.appendChild(node.cloneNode(true));
+  });
+
+  Object.assign(element.style, {
+    width: "100%",
+    maxWidth: "100%",
+    minHeight: "100%",
+    background: "#ffffff",
+    color: "#333333",
+    fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
+    fontSize: "10pt",
+    lineHeight: "1.4",
+  });
+
+  return element;
+};
+
+const equipmentTableCss = `
+        table.equipment-table { width: 100%; max-width: 100%; border-collapse: collapse; margin-bottom: 25px; table-layout: fixed; }
+        .equipment-table th, .equipment-table td { box-sizing: border-box; border: 1px solid #cbd5e1; padding: 5px 3px; text-align: center; font-size: 7.2pt; line-height: 1.25; vertical-align: top; overflow-wrap: anywhere; word-break: break-word; white-space: normal !important; }
+        .equipment-table th { background-color: #334155; font-weight: bold; color: #ffffff; text-transform: uppercase; font-size: 6.4pt; line-height: 1.15; letter-spacing: 0; }
+        .equipment-table tbody tr:nth-child(even) { background-color: #f8fafc; }
+        .equipment-table tbody tr:last-child { font-weight: bold; background-color: #e2e8f0; color: #1e293b; }
+        .equipment-table .col-sr { width: 5%; }
+        .equipment-table .col-item { width: 18%; }
+        .equipment-table .col-spec { width: 34%; }
+        .equipment-table .col-make { width: 8%; }
+        .equipment-table .col-hsn { width: 7%; }
+        .equipment-table .col-nabl { width: 6%; }
+        .equipment-table .col-qty { width: 5%; }
+        .equipment-table .col-unit { width: 9%; }
+        .equipment-table .col-discount { width: 6%; }
+        .equipment-table .col-gst-percent { width: 5%; }
+        .equipment-table .col-gst-amount { width: 9%; }
+        .equipment-table .col-total { width: 10%; }
+        .equipment-table .col-image { width: 10%; }
+        .equipment-table .text-left { text-align: left; }
+        .equipment-table .text-right { text-align: right; }
+        .equipment-table .item-name { font-weight: bold; }
+        .equipment-table img { max-width: 100%; height: auto; object-fit: contain; }
+`;
 
 export const generateQuotationPDF = (
   formData,
@@ -50,17 +131,17 @@ export const generateQuotationPDF = (
     (item) => item.image && item.image !== "",
   );
 
-  let tableHeaders = `<th style="white-space: nowrap; width: 4%;">Sr. No.</th><th style="width: 20%;">Item</th><th style="width: 35%;">Specifications</th>`;
-  if (showFields.make) tableHeaders += `<th style="white-space: nowrap;">Make</th>`;
-  if (showFields.hsn) tableHeaders += `<th style="white-space: nowrap;">HSN</th>`;
-  if (showFields.nabl) tableHeaders += `<th style="white-space: nowrap;">NABL</th>`;
-  tableHeaders += `<th style="white-space: nowrap;">Qty</th><th style="white-space: nowrap;">Unit Price</th>`;
-  if (showFields.discount) tableHeaders += `<th style="white-space: nowrap;">Disc %</th>`;
+  let tableHeaders = `<th class="col-sr">Sr. No.</th><th class="col-item">Item</th><th class="col-spec">Specifications</th>`;
+  if (showFields.make) tableHeaders += `<th class="col-make">Make</th>`;
+  if (showFields.hsn) tableHeaders += `<th class="col-hsn">HSN</th>`;
+  if (showFields.nabl) tableHeaders += `<th class="col-nabl">NABL</th>`;
+  tableHeaders += `<th class="col-qty">Qty</th><th class="col-unit">Unit Price</th>`;
+  if (showFields.discount) tableHeaders += `<th class="col-discount">Disc %</th>`;
   if (showFields.gst) {
-    tableHeaders += `<th style="white-space: nowrap;">GST %</th><th style="white-space: nowrap;">GST Amt</th>`;
+    tableHeaders += `<th class="col-gst-percent">GST %</th><th class="col-gst-amount">GST Amt</th>`;
   }
-  tableHeaders += `<th style="white-space: nowrap;">Total Price</th>`;
-  if (hasImages) tableHeaders += `<th style="white-space: nowrap;">Image</th>`;
+  tableHeaders += `<th class="col-total">Total Price</th>`;
+  if (hasImages) tableHeaders += `<th class="col-image">Image</th>`;
 
   const footerImageCellHtml = hasImages ? "<td></td>" : "";
   let baseColSpan = 3;
@@ -80,42 +161,44 @@ export const generateQuotationPDF = (
         }
 
         if (src) {
-          imageHtml = `<img src="${src}" width="90" height="90" style="object-fit: contain; border: 1px solid #eee; border-radius: 6px;">`;
+          imageHtml = `<img src="${src}" width="90" height="90" style="border: 1px solid #eee; border-radius: 6px;">`;
         }
       }
 
       const imageCellHtml = hasImages
-        ? `<td style="text-align:center; padding: 4px;">${imageHtml}</td>`
+        ? `<td class="col-image">${imageHtml}</td>`
         : "";
       const makeCell = showFields.make
-        ? `<td>${escapeHtml(item.make)}</td>`
+        ? `<td class="col-make">${escapeHtml(item.make)}</td>`
         : "";
-      const hsnCell = showFields.hsn ? `<td>${escapeHtml(item.hsn)}</td>` : "";
+      const hsnCell = showFields.hsn
+        ? `<td class="col-hsn">${escapeHtml(item.hsn)}</td>`
+        : "";
       const nablCell = showFields.nabl
-        ? `<td style="text-align:center;">${escapeHtml(item.nabl)}</td>`
+        ? `<td class="col-nabl">${escapeHtml(item.nabl)}</td>`
         : "";
       const discCell = showFields.discount
-        ? `<td>${parseFloat(item.discount_percent || 0).toFixed(2)}%</td>`
+        ? `<td class="col-discount">${parseFloat(item.discount_percent || 0).toFixed(2)}%</td>`
         : "";
 
         const gstCell = showFields.gst
-        ? `<td style="text-align:center;">${item.gst_percent}%</td>
-           <td style="text-align:right; white-space: nowrap;">${(item.gst_amount || 0).toFixed(2)}</td>`
+        ? `<td class="col-gst-percent">${item.gst_percent}%</td>
+           <td class="col-gst-amount text-right">${(item.gst_amount || 0).toFixed(2)}</td>`
         : "";
 
       return `
         <tr style="page-break-inside: avoid;">
-          <td style="text-align:center;">${index + 1}</td>
-          <td style="font-weight: bold; text-align: left;">${escapeHtml(item.item_name)}</td>
-          <td style="font-size: 9pt; white-space: pre-wrap; text-align: left;">${escapeHtml(item.specifications)}</td>
+          <td class="col-sr">${index + 1}</td>
+          <td class="col-item item-name text-left">${escapeHtml(item.item_name)}</td>
+          <td class="col-spec text-left">${escapeHtml(item.specifications)}</td>
           ${makeCell}
           ${hsnCell}
           ${nablCell}
-          <td style="text-align:center;">${item.qty}</td>
-          <td style="text-align:right; white-space: nowrap;">${item.unit_price.toFixed(2)}</td>
+          <td class="col-qty">${item.qty}</td>
+          <td class="col-unit text-right">${item.unit_price.toFixed(2)}</td>
           ${discCell}
           ${gstCell}
-          <td style="text-align:right; white-space: nowrap;">${item.total_price.toFixed(2)}</td>
+          <td class="col-total text-right">${item.total_price.toFixed(2)}</td>
           ${imageCellHtml}
         </tr>
       `;
@@ -126,7 +209,7 @@ export const generateQuotationPDF = (
     (sum, item) => sum + Number(item.qty || 0),
     0,
   );
-  const logoUrl = "/asewlogo.jpg"; // Relative to Vite's root (public directory)
+  const logoUrl = resolveAssetUrl(asewLogo);
 
   let freightDisplay = "";
   const freightInput = parseFloat(formData.Freight_Charges) || 0;
@@ -222,11 +305,7 @@ export const generateQuotationPDF = (
         .quotation-title { text-align: center; font-size: 16pt; font-weight: 800; margin-bottom: 20px; color: #1e293b; text-transform: uppercase; }
         .intro { margin-bottom: 20px; font-size: 10pt; padding: 0 15px; }
         .equipment-title { font-size: 12pt; font-weight: bold; margin-bottom: 15px; color: #334155; }
-        table.equipment-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; table-layout: auto; }
-        .equipment-table th, .equipment-table td { border: 1px solid #cbd5e1; padding: 6px 4px; text-align: center; font-size: 8pt; vertical-align: top; }
-        .equipment-table th { background-color: #334155; font-weight: bold; color: #ffffff; text-transform: uppercase; font-size: 7.5pt; letter-spacing: 0.5px; }
-        .equipment-table tbody tr:nth-child(even) { background-color: #f8fafc; }
-        .equipment-table tbody tr:last-child { font-weight: bold; background-color: #e2e8f0; color: #1e293b; }
+        ${equipmentTableCss}
         .terms { margin-bottom: 25px; page-break-inside: avoid; }
         .terms h3 { font-size: 12pt; font-weight: bold; margin-bottom: 15px; color: #334155; }
         table.terms-table { width: 100%; border-collapse: collapse; font-size: 10pt; border: 1px solid #cbd5e1; }
@@ -239,7 +318,6 @@ export const generateQuotationPDF = (
         .footer span { display: flex; align-items: center; gap: 8px; }
         .underline-text { border-bottom: 2px solid #334155; display: inline-block; padding-bottom: 4px;}
       </style>
-      <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     </head>
     <body>
       <div class="container">
@@ -305,7 +383,7 @@ export const generateQuotationPDF = (
             <tr><th>Freight</th><td>${freightDisplay}</td></tr>
             <tr><th>Packaging</th><td>${packagingDisplay}</td></tr>
             ${taxRowHtml}
-            <tr><th>Grand Total</th><td style="font-weight:bold; color:#dc2626;">₹ ${totals.grandTotal.toFixed(2)}</td></tr>
+            <tr><th>Grand Total</th><td style="font-weight:bold; color:#dc2626;">&#8377; ${totals.grandTotal.toFixed(2)}</td></tr>
             <tr><th>Payment</th><td>${escapeHtml(formData.Term_Payment || "")}</td></tr>
             <tr><th>Delivery</th><td>${escapeHtml(formData.Term_Delivery || "")}</td></tr>
             <tr><th>Warranty</th><td>${escapeHtml(formData.Term_Warranty || "").replace(/\n/g, "<br>")}</td></tr>
@@ -339,8 +417,6 @@ export const generateQuotationPDF = (
   }, 250);
 };
 
-import html2pdf from "html2pdf.js";
-
 /**
  * Silently generates a PDF Blob to be sent to the server.
  */
@@ -350,6 +426,8 @@ export const generatePDFBlob = async (
   showFields,
   totals,
 ) => {
+  const logoUrl = await getEmbeddedLogoUrl();
+
   return new Promise((resolve, reject) => {
     // We recreate the same HTML logic but without writing to a new window.
     // We create a hidden DOM element instead.
@@ -397,17 +475,17 @@ export const generatePDFBlob = async (
       (item) => item.image && item.image !== "",
     );
 
-    let tableHeaders = `<th style="white-space: nowrap; width: 4%;">Sr. No.</th><th style="width: 20%;">Item</th><th style="width: 35%;">Specifications</th>`;
-    if (showFields.make) tableHeaders += `<th style="white-space: nowrap;">Make</th>`;
-    if (showFields.hsn) tableHeaders += `<th style="white-space: nowrap;">HSN</th>`;
-    if (showFields.nabl) tableHeaders += `<th style="white-space: nowrap;">NABL</th>`;
-    tableHeaders += `<th style="white-space: nowrap;">Qty</th><th style="white-space: nowrap;">Unit Price</th>`;
-    if (showFields.discount) tableHeaders += `<th style="white-space: nowrap;">Disc %</th>`;
+    let tableHeaders = `<th class="col-sr">Sr. No.</th><th class="col-item">Item</th><th class="col-spec">Specifications</th>`;
+    if (showFields.make) tableHeaders += `<th class="col-make">Make</th>`;
+    if (showFields.hsn) tableHeaders += `<th class="col-hsn">HSN</th>`;
+    if (showFields.nabl) tableHeaders += `<th class="col-nabl">NABL</th>`;
+    tableHeaders += `<th class="col-qty">Qty</th><th class="col-unit">Unit Price</th>`;
+    if (showFields.discount) tableHeaders += `<th class="col-discount">Disc %</th>`;
     if (showFields.gst) {
-      tableHeaders += `<th style="white-space: nowrap;">GST %</th><th style="white-space: nowrap;">GST Amt</th>`;
+      tableHeaders += `<th class="col-gst-percent">GST %</th><th class="col-gst-amount">GST Amt</th>`;
     }
-    tableHeaders += `<th style="white-space: nowrap;">Total Price</th>`;
-    if (hasImages) tableHeaders += `<th style="white-space: nowrap;">Image</th>`;
+    tableHeaders += `<th class="col-total">Total Price</th>`;
+    if (hasImages) tableHeaders += `<th class="col-image">Image</th>`;
 
     const footerImageCellHtml = hasImages ? "<td></td>" : "";
     let baseColSpan = 3;
@@ -426,44 +504,44 @@ export const generatePDFBlob = async (
             src = item.image;
           }
           if (src) {
-            imageHtml = `<img src="${src}" width="90" height="90" style="object-fit: contain; border: 1px solid #eee; border-radius: 6px;">`;
+            imageHtml = `<img src="${src}" width="90" height="90" style="border: 1px solid #eee; border-radius: 6px;">`;
           }
         }
 
         const imageCellHtml = hasImages
-          ? `<td style="text-align:center; padding: 4px;">${imageHtml}</td>`
+          ? `<td class="col-image">${imageHtml}</td>`
           : "";
         const makeCell = showFields.make
-          ? `<td>${escapeHtml(item.make)}</td>`
+          ? `<td class="col-make">${escapeHtml(item.make)}</td>`
           : "";
         const hsnCell = showFields.hsn
-          ? `<td>${escapeHtml(item.hsn)}</td>`
+          ? `<td class="col-hsn">${escapeHtml(item.hsn)}</td>`
           : "";
         const nablCell = showFields.nabl
-          ? `<td style="text-align:center;">${escapeHtml(item.nabl)}</td>`
+          ? `<td class="col-nabl">${escapeHtml(item.nabl)}</td>`
           : "";
         const discCell = showFields.discount
-          ? `<td>${parseFloat(item.discount_percent || 0).toFixed(2)}%</td>`
+          ? `<td class="col-discount">${parseFloat(item.discount_percent || 0).toFixed(2)}%</td>`
           : "";
 
         const gstCell = showFields.gst
-          ? `<td style="text-align:center;">${item.gst_percent}%</td>
-             <td style="text-align:right; white-space: nowrap;">${(item.gst_amount || 0).toFixed(2)}</td>`
+          ? `<td class="col-gst-percent">${item.gst_percent}%</td>
+             <td class="col-gst-amount text-right">${(item.gst_amount || 0).toFixed(2)}</td>`
           : "";
 
         return `
           <tr style="page-break-inside: avoid;">
-            <td style="text-align:center;">${index + 1}</td>
-            <td style="font-weight: bold; text-align: left;">${escapeHtml(item.item_name)}</td>
-            <td style="font-size: 9pt; white-space: pre-wrap; text-align: left;">${escapeHtml(item.specifications)}</td>
+            <td class="col-sr">${index + 1}</td>
+            <td class="col-item item-name text-left">${escapeHtml(item.item_name)}</td>
+            <td class="col-spec text-left">${escapeHtml(item.specifications)}</td>
             ${makeCell}
             ${hsnCell}
             ${nablCell}
-            <td style="text-align:center;">${item.qty}</td>
-            <td style="text-align:right; white-space: nowrap;">${item.unit_price.toFixed(2)}</td>
+            <td class="col-qty">${item.qty}</td>
+            <td class="col-unit text-right">${item.unit_price.toFixed(2)}</td>
             ${discCell}
             ${gstCell}
-            <td style="text-align:right; white-space: nowrap;">${item.total_price.toFixed(2)}</td>
+            <td class="col-total text-right">${item.total_price.toFixed(2)}</td>
             ${imageCellHtml}
           </tr>
         `;
@@ -474,9 +552,6 @@ export const generatePDFBlob = async (
       (sum, item) => sum + Number(item.qty || 0),
       0,
     );
-    // Use an absolute URL for the print generator to avoid relative path issues when html2pdf runs
-    const logoUrl = window.location.origin + "/asewlogo.jpg";
-
     let freightDisplay = "";
     const freightInput = parseFloat(formData.Freight_Charges) || 0;
     const freightNoteText = formData.Freight_Note
@@ -563,11 +638,7 @@ export const generatePDFBlob = async (
           .quotation-title { text-align: center; font-size: 16pt; font-weight: 800; margin-bottom: 20px; color: #1e293b; text-transform: uppercase; }
           .intro { margin-bottom: 20px; font-size: 10pt; padding: 0 15px; }
           .equipment-title { font-size: 12pt; font-weight: bold; margin-bottom: 15px; color: #334155; }
-          table.equipment-table { width: 100%; border-collapse: collapse; margin-bottom: 25px; table-layout: auto; }
-          .equipment-table th, .equipment-table td { border: 1px solid #cbd5e1; padding: 6px 4px; text-align: center; font-size: 8pt; vertical-align: top; }
-          .equipment-table th { background-color: #334155; font-weight: bold; color: #ffffff; text-transform: uppercase; font-size: 7.5pt; letter-spacing: 0.5px; }
-          .equipment-table tbody tr:nth-child(even) { background-color: #f8fafc; }
-          .equipment-table tbody tr:last-child { font-weight: bold; background-color: #e2e8f0; color: #1e293b; }
+          ${equipmentTableCss}
           .terms { margin-bottom: 25px; page-break-inside: avoid; }
           .terms h3 { font-size: 12pt; font-weight: bold; margin-bottom: 15px; color: #334155; }
           table.terms-table { width: 100%; border-collapse: collapse; font-size: 10pt; border: 1px solid #cbd5e1; }
@@ -580,7 +651,6 @@ export const generatePDFBlob = async (
           .footer span { display: flex; align-items: center; gap: 8px; }
           .underline-text { border-bottom: 2px solid #334155; display: inline-block; padding-bottom: 4px;}
         </style>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
       </head>
       <body>
         <div class="container">
@@ -646,7 +716,7 @@ export const generatePDFBlob = async (
             <tr><th>Freight</th><td>${freightDisplay}</td></tr>
             <tr><th>Packaging</th><td>${packagingDisplay}</td></tr>
             ${taxRowHtml}
-            <tr><th>Grand Total</th><td style="font-weight:bold; color:#dc2626;">₹ ${totals.grandTotal.toFixed(2)}</td></tr>
+            <tr><th>Grand Total</th><td style="font-weight:bold; color:#dc2626;">&#8377; ${totals.grandTotal.toFixed(2)}</td></tr>
             <tr><th>Payment</th><td>${escapeHtml(formData.Term_Payment || "")}</td></tr>
             <tr><th>Delivery</th><td>${escapeHtml(formData.Term_Delivery || "")}</td></tr>
             <tr><th>Warranty</th><td>${escapeHtml(formData.Term_Warranty || "").replace(/\n/g, "<br>")}</td></tr>
@@ -668,23 +738,33 @@ export const generatePDFBlob = async (
       </html>
     `;
 
-    const element = document.createElement("div");
-    element.innerHTML = htmlContent;
+    const element = createPdfCaptureElement(htmlContent);
 
     // Use html2pdf to generate a Blob
     const opt = {
       margin: 5,
       filename: "quotation.pdf",
       image: { type: "jpeg", quality: 0.75 },
-      html2canvas: { scale: 1.5, useCORS: true },
+      html2canvas: {
+        scale: 1.5,
+        useCORS: true,
+        backgroundColor: "#ffffff",
+        scrollX: 0,
+        scrollY: 0,
+      },
       jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
     };
 
     html2pdf()
       .set(opt)
       .from(element)
-      .output("blob")
+      .toPdf()
+      .outputPdf("blob")
       .then((pdfBlob) => {
+        if (!pdfBlob || pdfBlob.size < 5000) {
+          throw new Error("Generated PDF is empty or too small");
+        }
+
         resolve(pdfBlob);
       })
       .catch((err) => {

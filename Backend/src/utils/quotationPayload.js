@@ -44,6 +44,10 @@ const buildQuotationRows = ({
   const items = parseItems(data.ITEMS);
   const showFields = parseShowFields(data.showFields);
   let imageCounter = 0;
+  const timestamp = new Date().toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    hour12: false,
+  });
 
   return items.map((item, index) => {
     const master = masterMap.get(normalizeLookupValue(item.item_name)) || {};
@@ -114,7 +118,7 @@ const buildQuotationRows = ({
       NABL: showFields.nabl
         ? item.nabl || data.NABL || master.NABL || ""
         : "",
-      Timestamp: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata", hour12: false }),
+      Timestamp: timestamp,
     };
   });
 };
