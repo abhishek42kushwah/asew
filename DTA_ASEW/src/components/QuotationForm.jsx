@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
 import { API_BASE_URL } from "../config";
@@ -194,6 +194,14 @@ const QuotationForm = () => {
   };
 
   const [isSearching, setIsSearching] = useState(false);
+
+  // Guards against duplicate submissions. The ref blocks rapid double-clicks
+  // synchronously (before React state updates); the state tracks which action
+  // ("save" | "submit") is in flight so only that button shows a spinner while
+  // the other is merely disabled.
+  const [submittingAction, setSubmittingAction] = useState(null);
+  const isSubmitting = submittingAction !== null;
+  const isSubmittingRef = useRef(false);
 
   // Helper to format date for HTML input (YYYY-MM-DD)
   const formatDateForInput = (dateStr) => {
@@ -693,6 +701,18 @@ const QuotationForm = () => {
       return;
     }
 
+    // Block duplicate submissions. Without this, a second click while the first
+    // request is still in flight (PDF generation + upload takes several seconds)
+    // sends a second save. The two requests race in the backend's
+    // delete-then-append, and both append their rows -> every item is written
+    // twice to the sheet. The ref check is synchronous so it stops a rapid
+    // double-click before the disabled state can render.
+    if (isSubmittingRef.current) {
+      return;
+    }
+    isSubmittingRef.current = true;
+    setSubmittingAction(actionType);
+
     // [DUP-DEBUG] Frontend item count before submit
     console.log(
       `[DUP-DEBUG][Frontend] Quotation_No=${values.Quotation_No} action=${actionType} ` +
@@ -803,6 +823,8 @@ const QuotationForm = () => {
           id: loadingToastId,
         },
       );
+      isSubmittingRef.current = false;
+      setSubmittingAction(null);
       return;
     }
 
@@ -819,6 +841,10 @@ const QuotationForm = () => {
           toast.error(error || "Failed to save quotation", {
             id: loadingToastId,
           });
+        })
+        .finally(() => {
+          isSubmittingRef.current = false;
+          setSubmittingAction(null);
         });
     } else if (actionType === "submit") {
       dispatch(createResponse(data))
@@ -833,6 +859,10 @@ const QuotationForm = () => {
           toast.error(error || "Failed to submit quotation response", {
             id: loadingToastId,
           });
+        })
+        .finally(() => {
+          isSubmittingRef.current = false;
+          setSubmittingAction(null);
         });
     }
   };
@@ -1757,15 +1787,33 @@ const QuotationForm = () => {
         <div className="flex flex-wrap justify-center gap-3 sm:gap-5 mt-10">
           <button
             onClick={() => handleSubmit("save")}
-            className={`${btnBaseClass} bg-[#5d69eb] text-white flex-1 sm:flex-none min-w-[100px] sm:min-w-[120px]`}
+            disabled={isSubmitting}
+            className={`${btnBaseClass} bg-[#5d69eb] text-white flex-1 sm:flex-none min-w-[100px] sm:min-w-[120px] disabled:opacity-60 disabled:cursor-not-allowed`}
           >
-            <FaSave /> Save
+            {submittingAction === "save" ? (
+              <>
+                <FaSpinner className="animate-spin" /> Saving...
+              </>
+            ) : (
+              <>
+                <FaSave /> Save
+              </>
+            )}
           </button>
           <button
             onClick={() => handleSubmit("submit")}
-            className={`${btnBaseClass} bg-[#6359b6] text-white flex-1 sm:flex-none min-w-[100px] sm:min-w-[120px]`}
+            disabled={isSubmitting}
+            className={`${btnBaseClass} bg-[#6359b6] text-white flex-1 sm:flex-none min-w-[100px] sm:min-w-[120px] disabled:opacity-60 disabled:cursor-not-allowed`}
           >
-            <FaPaperPlane /> Submit
+            {submittingAction === "submit" ? (
+              <>
+                <FaSpinner className="animate-spin" /> Submitting...
+              </>
+            ) : (
+              <>
+                <FaPaperPlane /> Submit
+              </>
+            )}
           </button>
           <button
             onClick={() => {

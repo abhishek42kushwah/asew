@@ -10,6 +10,8 @@ const {
   upsertQuotationEntry,
 } = require("../utils/quotationCache");
 
+const { withQuotationLock } = require("../utils/quotationLock");
+
 const SHEET_NAME = "save";
 
 const uploadQuotationAssets = async (files = {}) => {
@@ -75,41 +77,65 @@ exports.createSave = async (req, res) => {
       `[DUP-DEBUG][Backend] createSave Quotation_No=${quotationNo || "(new)"} received items=${receivedItemCount}`,
     );
 
-    if (!quotationNo) {
-      quotationNo = await getNextSaveQuotationNumber();
-    } else {
-      const deleteResult = await deleteQuotationRows(SHEET_NAME, quotationNo);
-      // [DUP-DEBUG] How many existing rows were removed before re-inserting.
-      // If deleted=0 here but old rows exist in the sheet, the new rows will be
-      // appended after them -> item repetition.
-      console.log(
-        `[DUP-DEBUG][Backend] deleteQuotationRows(${quotationNo}) ->`,
-        deleteResult,
-      );
-    }
+    // Serialize the sheet mutation per quotation so concurrent saves of the
+    // same quotation can't double-append. Asset uploads above are already done
+    // and run in parallel; only the delete+append needs ordering.
+    const lockKey = quotationNo || "__new_save__";
+    const { resolvedQuotationNo, insertedCount } = await withQuotationLock(
+      lockKey,
+      async () => {
+        let resolvedNo = quotationNo;
 
-    const rowsToInsert = buildQuotationRows({
-      data,
-      quotationNo,
-      masterMap,
-      generatedPdfUrl: assets.generatedPdfUrl,
-      imageMap: assets.imageMap,
-    });
+        if (!resolvedNo) {
+          resolvedNo = await getNextSaveQuotationNumber();
+        } else {
+          const deleteResult = await deleteQuotationRows(SHEET_NAME, resolvedNo);
+          // [DUP-DEBUG] How many existing rows were removed before re-inserting.
+          // If deleted=0 here but old rows exist in the sheet, the new rows will
+          // be appended after them -> item repetition.
+          console.log(
+            `[DUP-DEBUG][Backend] deleteQuotationRows(${resolvedNo}) ->`,
+            deleteResult,
+          );
+        }
 
-    const appendMetadata = await db.insertMultipleByHeader(SHEET_NAME, rowsToInsert);
+        const rowsToInsert = buildQuotationRows({
+          data,
+          quotationNo: resolvedNo,
+          masterMap,
+          generatedPdfUrl: assets.generatedPdfUrl,
+          imageMap: assets.imageMap,
+        });
 
-    // [DUP-DEBUG] Rows actually written to Sheets (count + appended row range)
-    console.log(
-      `[DUP-DEBUG][Backend] rows written to Sheets for ${quotationNo}: count=${rowsToInsert.length}`,
-      appendMetadata,
+        const appendMetadata = await db.insertMultipleByHeader(
+          SHEET_NAME,
+          rowsToInsert,
+        );
+
+        // [DUP-DEBUG] Rows actually written to Sheets (count + appended range)
+        console.log(
+          `[DUP-DEBUG][Backend] rows written to Sheets for ${resolvedNo}: count=${rowsToInsert.length}`,
+          appendMetadata,
+        );
+        await upsertQuotationEntry(
+          SHEET_NAME,
+          resolvedNo,
+          rowsToInsert,
+          appendMetadata,
+        );
+
+        return {
+          resolvedQuotationNo: resolvedNo,
+          insertedCount: rowsToInsert.length,
+        };
+      },
     );
-    await upsertQuotationEntry(SHEET_NAME, quotationNo, rowsToInsert, appendMetadata);
 
     res.status(201).json({
       success: true,
-      quotation_no: quotationNo,
+      quotation_no: resolvedQuotationNo,
       message: "Save created successfully",
-      total_items: rowsToInsert.length,
+      total_items: insertedCount,
       durationMs: Date.now() - startedAt,
     });
   } catch (error) {

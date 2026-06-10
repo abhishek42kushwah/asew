@@ -2,32 +2,12 @@
  * PDF Generator Utility for Quotation Form
  */
 import html2pdf from "html2pdf.js";
-import asewLogo from "../assets/asewlogo.jpg";
-
-const resolveAssetUrl = (assetUrl) => new URL(assetUrl, window.location.href).href;
-
-const readBlobAsDataUrl = (blob) =>
-  new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result);
-    reader.onerror = reject;
-    reader.readAsDataURL(blob);
-  });
-
-const getEmbeddedLogoUrl = async () => {
-  const logoUrl = resolveAssetUrl(asewLogo);
-
-  try {
-    const response = await fetch(logoUrl);
-    if (!response.ok) {
-      throw new Error(`Logo request failed: ${response.status}`);
-    }
-    return await readBlobAsDataUrl(await response.blob());
-  } catch (error) {
-    console.warn("[pdfGenerator] Falling back to logo URL:", error.message);
-    return logoUrl;
-  }
-};
+// `?inline` makes Vite embed the logo as a build-time base64 data URI rather
+// than a hashed file URL. This guarantees it renders everywhere the PDF is
+// produced — the print window (about:blank, where relative/asset paths don't
+// resolve) and html2canvas (which captures a detached element and otherwise
+// can't reliably fetch an external image in time). No runtime fetch needed.
+import asewLogo from "../assets/asewlogo.jpg?inline";
 
 const createPdfCaptureElement = (htmlContent) => {
   const parsedDocument = new DOMParser().parseFromString(
@@ -209,7 +189,7 @@ export const generateQuotationPDF = (
     (sum, item) => sum + Number(item.qty || 0),
     0,
   );
-  const logoUrl = resolveAssetUrl(asewLogo);
+  const logoUrl = asewLogo;
 
   let freightDisplay = "";
   const freightInput = parseFloat(formData.Freight_Charges) || 0;
@@ -426,7 +406,7 @@ export const generatePDFBlob = async (
   showFields,
   totals,
 ) => {
-  const logoUrl = await getEmbeddedLogoUrl();
+  const logoUrl = asewLogo;
 
   return new Promise((resolve, reject) => {
     // We recreate the same HTML logic but without writing to a new window.

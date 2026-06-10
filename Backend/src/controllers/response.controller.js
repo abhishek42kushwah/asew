@@ -9,6 +9,7 @@ const {
   getQuotationEntry,
   upsertQuotationEntry,
 } = require("../utils/quotationCache");
+const { withQuotationLock } = require("../utils/quotationLock");
 
 const SHEET_NAME = "response";
 
@@ -61,30 +62,53 @@ exports.createResponse = async (req, res) => {
       getItemMasterMap(),
     ]);
 
-    let quotationNo = data.Quotation_No?.toString().trim();
+    const quotationNo = data.Quotation_No?.toString().trim();
 
-    if (!quotationNo) {
-      quotationNo = await getNextResponseQuotationNumber();
-    } else {
-      await deleteQuotationRows(SHEET_NAME, quotationNo);
-    }
+    // Serialize the sheet mutation per quotation so concurrent submits of the
+    // same quotation can't double-append (each item written twice).
+    const lockKey = quotationNo || "__new_response__";
+    const { resolvedQuotationNo, insertedCount } = await withQuotationLock(
+      lockKey,
+      async () => {
+        let resolvedNo = quotationNo;
 
-    const rowsToInsert = buildQuotationRows({
-      data,
-      quotationNo,
-      masterMap,
-      generatedPdfUrl: assets.generatedPdfUrl,
-      imageMap: assets.imageMap,
-    });
+        if (!resolvedNo) {
+          resolvedNo = await getNextResponseQuotationNumber();
+        } else {
+          await deleteQuotationRows(SHEET_NAME, resolvedNo);
+        }
 
-    const appendMetadata = await db.insertMultipleByHeader(SHEET_NAME, rowsToInsert);
-    await upsertQuotationEntry(SHEET_NAME, quotationNo, rowsToInsert, appendMetadata);
+        const rowsToInsert = buildQuotationRows({
+          data,
+          quotationNo: resolvedNo,
+          masterMap,
+          generatedPdfUrl: assets.generatedPdfUrl,
+          imageMap: assets.imageMap,
+        });
+
+        const appendMetadata = await db.insertMultipleByHeader(
+          SHEET_NAME,
+          rowsToInsert,
+        );
+        await upsertQuotationEntry(
+          SHEET_NAME,
+          resolvedNo,
+          rowsToInsert,
+          appendMetadata,
+        );
+
+        return {
+          resolvedQuotationNo: resolvedNo,
+          insertedCount: rowsToInsert.length,
+        };
+      },
+    );
 
     res.status(201).json({
       success: true,
-      quotation_no: quotationNo,
+      quotation_no: resolvedQuotationNo,
       message: "Response created successfully",
-      total_items: rowsToInsert.length,
+      total_items: insertedCount,
       durationMs: Date.now() - startedAt,
     });
   } catch (error) {
