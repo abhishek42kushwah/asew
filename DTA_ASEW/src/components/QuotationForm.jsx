@@ -158,8 +158,8 @@ const QuotationForm = () => {
     label: c.Customer_Name || c.CUSTOMER_NAME,
   }));
 
-  const itemOptions = masterItems.map((mi) => ({
-    value: mi.ITEM_CODE || mi.ITEM_NAME || "", // Use ITEM_CODE if available
+  const itemOptions = masterItems.map((mi, idx) => ({
+    value: idx, // array index = guaranteed-unique key (ITEM_CODE can collide)
     label: mi.ITEM_NAME ? mi.ITEM_NAME.trim() : "",
     itemName: mi.ITEM_NAME || "",
   }));
@@ -1321,7 +1321,9 @@ const QuotationForm = () => {
                             handleEquipmentChange(
                               index,
                               "item_name",
-                              selected ? selected.value : "",
+                              selected
+                                ? masterItems[selected.value]?.ITEM_NAME ?? ""
+                                : "",
                             )
                           }
                           onBlur={() =>
