@@ -270,16 +270,18 @@ const getItemMasterMap = async () => {
 };
 
 const getNextSaveQuotationNumber = async () => {
-  const [saveState, responseState] = await Promise.all([
-    ensureSheetLoaded("save"),
-    ensureSheetLoaded("response"),
+  // Only the Quotation_No column is needed to find the max sequence. Reading
+  // the single column (instead of loading + grouping every row of both sheets)
+  // keeps this fast on a cold start, where the full load was timing out.
+  const [saveNos, responseNos] = await Promise.all([
+    db.getColumnValues("save", "Quotation_No"),
+    db.getColumnValues("response", "Quotation_No"),
   ]);
 
   let maxSequence = SAVE_QUOTATION_MIN_SEQUENCE;
 
-  [saveState, responseState].forEach((state) => {
-    state.byQuotationNo.forEach((entry) => {
-      const quotationNo = entry.quotationNo;
+  [saveNos, responseNos].forEach((quotationNos) => {
+    quotationNos.forEach((quotationNo) => {
       if (!quotationNo || !quotationNo.startsWith(SAVE_QUOTATION_SERIES_PREFIX)) {
         return;
       }
@@ -299,14 +301,11 @@ const getNextSaveQuotationNumber = async () => {
 };
 
 const getNextResponseQuotationNumber = async () => {
-  const responseState = await ensureSheetLoaded("response");
+  const responseNos = await db.getColumnValues("response", "Quotation_No");
   let maxSequence = RESPONSE_QUOTATION_MIN_SEQUENCE;
 
-  responseState.byQuotationNo.forEach((entry) => {
-    const sequence = parseQuotationSequence(
-      entry.quotationNo,
-      RESPONSE_QUOTATION_PREFIX,
-    );
+  responseNos.forEach((quotationNo) => {
+    const sequence = parseQuotationSequence(quotationNo, RESPONSE_QUOTATION_PREFIX);
 
     if (sequence !== null && sequence > maxSequence) {
       maxSequence = sequence;
