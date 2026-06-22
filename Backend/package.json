@@ -5,6 +5,7 @@
   "scripts": {
     "start": "node Index.js",
     "dev": "nodemon Index.js",
+    "backfill:gst": "node src/scripts/backfillQuotationGst.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "",

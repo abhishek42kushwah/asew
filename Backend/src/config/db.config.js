@@ -89,8 +89,26 @@ const getSheetMetadata = async (sheetName, { forceRefresh = false } = {}) => {
   return metadata;
 };
 
+// Force a header re-read when a data object carries keys absent from the
+// cached header. The live sheet header may have gained columns (e.g. a
+// migration/backfill) since we last cached it; without this, those keys would
+// be silently dropped on write because the column doesn't appear in the cache.
+const resolveHeadersFor = async (sheetName, dataObjects) => {
+  let headers = await getHeaders(sheetName);
+  const headerSet = new Set(headers);
+  const hasUnknownKey = dataObjects.some((obj) =>
+    Object.keys(obj).some((key) => !headerSet.has(key)),
+  );
+
+  if (hasUnknownKey) {
+    headers = await getHeaders(sheetName, { forceRefresh: true });
+  }
+
+  return headers;
+};
+
 const insertByHeader = async (sheetName, dataObject) => {
-  const rawHeaders = await getHeaders(sheetName);
+  const rawHeaders = await resolveHeadersFor(sheetName, [dataObject]);
   const row = rawHeaders.map((header) => dataObject[header] ?? "");
 
   const response = await sheets.spreadsheets.values.append({
@@ -114,7 +132,7 @@ const insertMultipleByHeader = async (sheetName, dataObjects) => {
     };
   }
 
-  const rawHeaders = await getHeaders(sheetName);
+  const rawHeaders = await resolveHeadersFor(sheetName, dataObjects);
   const rows = dataObjects.map((dataObject) =>
     rawHeaders.map((header) => dataObject[header] ?? ""),
   );
