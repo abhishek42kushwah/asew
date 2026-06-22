@@ -158,6 +158,36 @@ const getAll = async (sheetName) => {
   return mapRows(headers, res.data.values || []);
 };
 
+// 0-based column index -> A1 column letter (0->A, 26->AA).
+const columnNumberToLetter = (index) => {
+  let n = index;
+  let letter = "";
+  do {
+    letter = String.fromCharCode(65 + (n % 26)) + letter;
+    n = Math.floor(n / 26) - 1;
+  } while (n >= 0);
+  return letter;
+};
+
+// Read a SINGLE column's values (non-empty, trimmed). Cheap alternative to
+// getAll when only one field is needed (e.g. max quotation number) — avoids
+// pulling/parsing the entire multi-column sheet.
+const getColumnValues = async (sheetName, columnName) => {
+  const headers = await getHeaders(sheetName);
+  const idx = headers.indexOf(columnName);
+  if (idx === -1) return [];
+
+  const letter = columnNumberToLetter(idx);
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!${letter}2:${letter}`,
+  });
+
+  return (res.data.values || [])
+    .map((row) => (row[0] != null ? row[0].toString().trim() : ""))
+    .filter(Boolean);
+};
+
 const getAllWithRowNumbers = async (sheetName) => {
   const headers = await getHeaders(sheetName);
   const res = await sheets.spreadsheets.values.get({
@@ -423,6 +453,7 @@ module.exports = {
   findById,
   getAll,
   getAllWithRowNumbers,
+  getColumnValues,
   getHeaders,
   getTail,
   insertByHeader,
