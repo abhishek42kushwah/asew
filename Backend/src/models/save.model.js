@@ -43,6 +43,11 @@ const createSaveSheet = async () => {
       "Freight_Type",
       "Packaging_Type",
       "Timestamp",
+      "Item_GST_Percent",
+      "Item_GST_Amount",
+      "Freight_GST_Percent",
+      "Packaging_GST_Percent",
+      "Total_GST",
     ],
   ];
 

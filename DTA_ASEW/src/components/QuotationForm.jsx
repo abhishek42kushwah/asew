@@ -228,6 +228,26 @@ const QuotationForm = () => {
     return dateStr;
   };
 
+  // Resolve a sane per-item GST % from possibly-missing/corrupt stored data.
+  // Total_Price is the customer-facing quoted line total (the value in the
+  // generated PDF), so it is the source of truth — derive the rate from it:
+  //   rate = (total / taxable - 1) * 100
+  // The stored Item_GST_Percent column is corruption-prone (other values have
+  // leaked into it, e.g. a 13489 Total_GST or a stray 80), so it is only a
+  // fallback used when no usable total exists. Defaults to 18 as a last resort.
+  const resolveGstPercent = (rawPct, taxable, storedTotal) => {
+    if (taxable > 0 && storedTotal >= taxable - 0.01) {
+      const r = (storedTotal / taxable - 1) * 100;
+      if (r >= -0.5 && r <= 100) return Math.max(0, Math.round(r * 100) / 100);
+    }
+    const s = String(rawPct ?? "").trim();
+    if (s !== "") {
+      const p = Number(s);
+      if (Number.isFinite(p) && p >= 0 && p <= 100) return p;
+    }
+    return 18;
+  };
+
   // Helper to populate form from a found quotation record
   const populateFormFromRecord = (found) => {
     const header = found.header || found;
@@ -269,9 +289,13 @@ const QuotationForm = () => {
             item.Discount_Percent ||
             0,
         );
-        const gst_percent = Number(item.gst_percent || item.GST_Percent || 18);
-        
         const taxable = qty * unit_price * (1 - discount_percent / 100);
+        const stored_total = Number(item.total_price || item.Total_Price || 0);
+        const gst_percent = resolveGstPercent(
+          item.gst_percent ?? item.GST_Percent,
+          taxable,
+          stored_total,
+        );
         const calc_gst_amount = taxable * (gst_percent / 100);
         const calc_total_price = taxable + calc_gst_amount;
 
@@ -614,9 +638,13 @@ const QuotationForm = () => {
                 item.Discount_Percent ||
                 0,
             );
-            const gst_percent = Number(item.gst_percent || item.GST_Percent || 18);
-            
             const taxable = qty * unit_price * (1 - discount_percent / 100);
+            const stored_total = Number(item.total_price || item.Total_Price || 0);
+            const gst_percent = resolveGstPercent(
+              item.gst_percent ?? item.GST_Percent,
+              taxable,
+              stored_total,
+            );
             const calc_gst_amount = taxable * (gst_percent / 100);
             const calc_total_price = taxable + calc_gst_amount;
 
