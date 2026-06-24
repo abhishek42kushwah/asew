@@ -3,7 +3,7 @@ const { uploadToDrive } = require("../utils/googleDrive");
 const { groupQuotationRows } = require("../utils/quotationFormatter");
 const { buildQuotationRows } = require("../utils/quotationPayload");
 const {
-  allocateResponseQuotationNumber,
+  allocateSaveQuotationNumber,
   deleteQuotationRows,
   getItemMasterMap,
   getQuotationEntry,
@@ -105,7 +105,11 @@ exports.createResponse = async (req, res) => {
         return writeRows(quotationNo);
       });
     } else {
-      const alloc = await allocateResponseQuotationNumber();
+      // A response uses the SHARED QT number series (highest of the save +
+      // response sheets, +1) — the same atomic counter Save draws from — so the
+      // submitted number matches the QT number shown on the form, and a number
+      // is never reused across the two sheets.
+      const alloc = await allocateSaveQuotationNumber();
       if (alloc.viaPg) {
         // Globally-unique number -> concurrent new submits run in parallel.
         outcome = await withQuotationLock(alloc.quotationNo, () =>
@@ -114,7 +118,7 @@ exports.createResponse = async (req, res) => {
       } else {
         // Fallback (Postgres down): serialize and re-allocate inside the lock.
         outcome = await withQuotationLock("__new_response__", async () => {
-          const fresh = await allocateResponseQuotationNumber();
+          const fresh = await allocateSaveQuotationNumber();
           return writeRows(fresh.quotationNo);
         });
       }
