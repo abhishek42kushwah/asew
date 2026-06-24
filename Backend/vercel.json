@@ -11,5 +11,11 @@
             "src": "/(.*)",
             "dest": "Index.js"
         }
+    ],
+    "crons": [
+        {
+            "path": "/api/quotation/db-health",
+            "schedule": "*/5 * * * *"
+        }
     ]
 }
