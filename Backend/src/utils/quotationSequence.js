@@ -26,12 +26,18 @@ let tableEnsured = false;
 
 const getPool = () => {
   if (!pool) {
+    // Prefer a single DATABASE_URL (point it at Neon's pooled "-pooler"
+    // endpoint); otherwise fall back to discrete PG* env vars.
+    const connectionString = process.env.DATABASE_URL || undefined;
+    // Neon always requires TLS; an explicit ssl object overrides the URL's
+    // sslmode and sidesteps cert-verification edge cases on the pooler.
+    const useSsl = connectionString
+      ? true
+      : Boolean(process.env.PGSSLMODE && process.env.PGSSLMODE !== "disable");
+
     pool = new Pool({
-      // Neon and most managed Postgres require TLS. PGSSLMODE=disable opts out.
-      ssl:
-        process.env.PGSSLMODE && process.env.PGSSLMODE !== "disable"
-          ? { rejectUnauthorized: false }
-          : undefined,
+      ...(connectionString ? { connectionString } : {}),
+      ssl: useSsl ? { rejectUnauthorized: false } : undefined,
       // Each serverless invocation is single-request; one connection is enough,
       // and keeps total connections low across many Vercel instances.
       max: 1,
@@ -134,13 +140,16 @@ const allocateSequence = async (series, seedNext) => {
  * GET /api/quotation/db-health to verify the atomic allocator is live in prod.
  */
 const checkHealth = async () => {
-  const configured = Boolean(process.env.PGHOST && process.env.PGDATABASE);
+  const configured = Boolean(
+    process.env.DATABASE_URL ||
+      (process.env.PGHOST && process.env.PGDATABASE),
+  );
   if (!configured) {
     return {
       ok: false,
       configured: false,
       error:
-        "PG* env vars (PGHOST/PGDATABASE/...) are not set — allocation is using the sheet fallback (no cross-instance guarantee).",
+        "Neither DATABASE_URL nor PG* env vars are set — allocation is using the sheet fallback (no cross-instance guarantee).",
     };
   }
 
