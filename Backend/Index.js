@@ -53,17 +53,29 @@ if (fs.existsSync("uploads")) {
   app.use("/uploads", express.static("uploads"));
 }
 
-// Initialize Database Tables
-Promise.all([
-  createItemMasterSheet(),
-  createCustomerSheet(),
-  createSaveSheet(),
-  createResponseSheet(),
-])
-  .then(() => {
-    console.log("Database synchronization complete");
-  })
-  .catch((err) => console.error("Database synchronization failed:", err));
+// Sheet/header bootstrap. Each call hits the Google Sheets API (addSheet +
+// header write). On serverless this would run on EVERY cold start, contending
+// with the request's own Sheets reads — that burst was making the customer/item
+// endpoints take ~50s on a cold instance. The sheets + headers already exist,
+// so skip by default and run the one-off migration explicitly only when the
+// schema changes: deploy once with RUN_SHEET_MIGRATION=true (or run
+// src/config/runSheetMigration.js).
+if (process.env.RUN_SHEET_MIGRATION === "true") {
+  Promise.all([
+    createItemMasterSheet(),
+    createCustomerSheet(),
+    createSaveSheet(),
+    createResponseSheet(),
+  ])
+    .then(() => {
+      console.log("Database synchronization complete");
+    })
+    .catch((err) => console.error("Database synchronization failed:", err));
+} else {
+  console.log(
+    "Skipping sheet bootstrap (set RUN_SHEET_MIGRATION=true to re-create sheets/headers).",
+  );
+}
 
 if (process.env.NODE_ENV !== "production") {
   app.listen(PORT, () => {
