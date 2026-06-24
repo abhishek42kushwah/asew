@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import axios from "axios";
 import { API_BASE_URL } from "../config";
@@ -153,18 +153,31 @@ const QuotationForm = () => {
   const { values, setFieldValue, setValues, errors, touched, setFieldTouched } =
     formik;
 
-  const customerOptions = customers.map((c) => ({
-    value: c.Customer_Name || c.CUSTOMER_NAME,
-    label: c.Customer_Name || c.CUSTOMER_NAME,
-  }));
+  // Memoize the option lists and select styles. Without this they are rebuilt
+  // on EVERY render (every keystroke) — ~2k customers + ~3k items = thousands of
+  // objects each time, multiplied by one item <Select> per row. That rebuild was
+  // the form's main lag. Now they recompute only when the source data changes.
+  const customerOptions = useMemo(
+    () =>
+      customers.map((c) => ({
+        value: c.Customer_Name || c.CUSTOMER_NAME,
+        label: c.Customer_Name || c.CUSTOMER_NAME,
+      })),
+    [customers],
+  );
 
-  const itemOptions = masterItems.map((mi, idx) => ({
-    value: idx, // array index = guaranteed-unique key (ITEM_CODE can collide)
-    label: mi.ITEM_NAME ? mi.ITEM_NAME.trim() : "",
-    itemName: mi.ITEM_NAME || "",
-  }));
+  const itemOptions = useMemo(
+    () =>
+      masterItems.map((mi, idx) => ({
+        value: idx, // array index = guaranteed-unique key (ITEM_CODE can collide)
+        label: mi.ITEM_NAME ? mi.ITEM_NAME.trim() : "",
+        itemName: mi.ITEM_NAME || "",
+      })),
+    [masterItems],
+  );
 
-  const customSelectStyles = {
+  const customSelectStyles = useMemo(
+    () => ({
     control: (provided, state) => ({
       ...provided,
       borderColor: state.isFocused ? "#2ecc71" : "#e5e7eb",
@@ -191,7 +204,9 @@ const QuotationForm = () => {
       },
       cursor: "pointer",
     }),
-  };
+    }),
+    [],
+  );
 
   const [isSearching, setIsSearching] = useState(false);
 

@@ -134,6 +134,54 @@ const allocateSequence = async (series, seedNext) => {
   return null;
 };
 
+const isConfigured = () =>
+  Boolean(
+    process.env.DATABASE_URL ||
+      (process.env.PGHOST && process.env.PGDATABASE),
+  );
+
+const withTimeout = (promise, ms) =>
+  ms > 0
+    ? Promise.race([
+        promise,
+        new Promise((resolve) => setTimeout(() => resolve(null), ms)),
+      ])
+    : promise;
+
+/**
+ * Fast READ of the current counter for a series WITHOUT incrementing — a single
+ * indexed-row lookup. Used for the form's "next number" preview so it doesn't
+ * scan ~30k sheet cells. Returns the last allocated sequence, or null if the
+ * counter is not yet seeded / Postgres is unavailable / the read exceeds
+ * timeoutMs (caller then falls back to the sheet scan).
+ */
+const peekSequence = async (series, { timeoutMs = 0 } = {}) => {
+  if (!isConfigured()) {
+    return null;
+  }
+
+  const run = (async () => {
+    let client;
+    try {
+      client = await getPool().connect();
+      const { rows } = await client.query(
+        `SELECT last_seq FROM quotation_counter WHERE series = $1`,
+        [series],
+      );
+      return rows.length ? Number(rows[0].last_seq) : null;
+    } catch (err) {
+      // Table may not exist yet, or PG unreachable -> caller falls back.
+      return null;
+    } finally {
+      if (client) {
+        client.release();
+      }
+    }
+  })();
+
+  return withTimeout(run, timeoutMs);
+};
+
 /**
  * Health probe for the Postgres counter. Confirms the PG* env vars are set and
  * the DB is reachable, and returns the current counter values. Used by
@@ -174,4 +222,4 @@ const checkHealth = async () => {
   }
 };
 
-module.exports = { allocateSequence, checkHealth };
+module.exports = { allocateSequence, checkHealth, peekSequence };

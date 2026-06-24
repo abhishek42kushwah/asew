@@ -77,67 +77,75 @@ exports.createSave = async (req, res) => {
       `[DUP-DEBUG][Backend] createSave Quotation_No=${quotationNo || "(new)"} received items=${receivedItemCount}`,
     );
 
-    // Serialize the sheet mutation per quotation so concurrent saves of the
-    // same quotation can't double-append. Asset uploads above are already done
-    // and run in parallel; only the delete+append needs ordering.
-    // A brand-new quotation mints its number HERE, at save time, atomically
-    // under a shared lock — instead of trusting the number the client previewed
-    // when the form opened. Two systems that opened the form and saw the same
-    // preview no longer write to the same quotation. A new quotation also skips
-    // the (expensive, full-sheet) delete since it has no existing rows to
-    // replace. An edit (isNew=false) keeps the provided number and replaces.
     const isNew = data.isNew === "true" || data.isNew === true || !quotationNo;
-    const lockKey = isNew ? "__new_save__" : quotationNo;
-    const { resolvedQuotationNo, insertedCount } = await withQuotationLock(
-      lockKey,
-      async () => {
-        let resolvedNo;
 
-        if (isNew) {
-          resolvedNo = await allocateSaveQuotationNumber();
-        } else {
-          resolvedNo = quotationNo;
-          const deleteResult = await deleteQuotationRows(SHEET_NAME, resolvedNo);
-          // [DUP-DEBUG] How many existing rows were removed before re-inserting.
-          // If deleted=0 here but old rows exist in the sheet, the new rows will
-          // be appended after them -> item repetition.
-          console.log(
-            `[DUP-DEBUG][Backend] deleteQuotationRows(${resolvedNo}) ->`,
-            deleteResult,
-          );
-        }
+    // Append this quotation's rows for an already-resolved number.
+    const writeRows = async (resolvedNo) => {
+      const rowsToInsert = buildQuotationRows({
+        data,
+        quotationNo: resolvedNo,
+        masterMap,
+        generatedPdfUrl: assets.generatedPdfUrl,
+        imageMap: assets.imageMap,
+      });
 
-        const rowsToInsert = buildQuotationRows({
-          data,
-          quotationNo: resolvedNo,
-          masterMap,
-          generatedPdfUrl: assets.generatedPdfUrl,
-          imageMap: assets.imageMap,
-        });
+      const appendMetadata = await db.insertMultipleByHeader(
+        SHEET_NAME,
+        rowsToInsert,
+      );
 
-        const appendMetadata = await db.insertMultipleByHeader(
-          SHEET_NAME,
-          rowsToInsert,
-        );
+      // [DUP-DEBUG] Rows actually written to Sheets (count + appended range)
+      console.log(
+        `[DUP-DEBUG][Backend] rows written to Sheets for ${resolvedNo}: count=${rowsToInsert.length}`,
+        appendMetadata,
+      );
+      await upsertQuotationEntry(
+        SHEET_NAME,
+        resolvedNo,
+        rowsToInsert,
+        appendMetadata,
+      );
 
-        // [DUP-DEBUG] Rows actually written to Sheets (count + appended range)
+      return {
+        resolvedQuotationNo: resolvedNo,
+        insertedCount: rowsToInsert.length,
+      };
+    };
+
+    let outcome;
+    if (!isNew) {
+      // Edit: serialize per quotation so the delete+append can't race for the
+      // same number (which would double-append items).
+      outcome = await withQuotationLock(quotationNo, async () => {
+        const deleteResult = await deleteQuotationRows(SHEET_NAME, quotationNo);
         console.log(
-          `[DUP-DEBUG][Backend] rows written to Sheets for ${resolvedNo}: count=${rowsToInsert.length}`,
-          appendMetadata,
+          `[DUP-DEBUG][Backend] deleteQuotationRows(${quotationNo}) ->`,
+          deleteResult,
         );
-        await upsertQuotationEntry(
-          SHEET_NAME,
-          resolvedNo,
-          rowsToInsert,
-          appendMetadata,
+        return writeRows(quotationNo);
+      });
+    } else {
+      const alloc = await allocateSaveQuotationNumber();
+      if (alloc.viaPg) {
+        // Postgres gave a globally-unique number, so concurrent new saves use
+        // DIFFERENT numbers and run in parallel. Lock on the unique number only
+        // to make an accidental double-submit of the same number idempotent.
+        outcome = await withQuotationLock(alloc.quotationNo, () =>
+          writeRows(alloc.quotationNo),
         );
+      } else {
+        // Fallback (Postgres down): the number came from the sheet peek and two
+        // concurrent saves could collide. Serialize new saves on this instance
+        // and RE-allocate inside the lock so the sheet re-peek advances between
+        // writers.
+        outcome = await withQuotationLock("__new_save__", async () => {
+          const fresh = await allocateSaveQuotationNumber();
+          return writeRows(fresh.quotationNo);
+        });
+      }
+    }
 
-        return {
-          resolvedQuotationNo: resolvedNo,
-          insertedCount: rowsToInsert.length,
-        };
-      },
-    );
+    const { resolvedQuotationNo, insertedCount } = outcome;
 
     res.status(201).json({
       success: true,

@@ -2,6 +2,7 @@ const db = require("../config/db.config");
 const { buildGroupedQuotation } = require("./quotationFormatter");
 const {
   SAVE_QUOTATION_MIN_SEQUENCE,
+  SAVE_QUOTATION_MAX_SEQUENCE,
   SAVE_QUOTATION_PREFIX,
   RESPONSE_QUOTATION_MIN_SEQUENCE,
   RESPONSE_QUOTATION_PREFIX,
@@ -9,7 +10,11 @@ const {
   parseQuotationSequence,
 } = require("./quotationNumber");
 const { buildItemMasterMap } = require("./quotationPayload");
-const { allocateSequence } = require("./quotationSequence");
+const { allocateSequence, peekSequence } = require("./quotationSequence");
+
+// Bound the PG preview read so a cold/down DB never hangs the form's spinner;
+// on timeout we fall back to the (slower) sheet scan.
+const PEEK_TIMEOUT_MS = 3000;
 
 const ITEM_MASTER_TTL_MS = 5 * 60 * 1000;
 const SHEET_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -281,9 +286,16 @@ const getItemMasterMap = async () => {
 };
 
 const getNextSaveQuotationNumber = async () => {
-  // Only the Quotation_No column is needed to find the max sequence. Reading
-  // the single column (instead of loading + grouping every row of both sheets)
-  // keeps this fast on a cold start, where the full load was timing out.
+  // Fast path: once seeded, the Postgres counter is the source of truth — a
+  // single indexed-row read instead of scanning ~30k sheet cells. This is what
+  // the form's "Quotation No" spinner waits on, so keep it cheap.
+  const pgLast = await peekSequence("save", { timeoutMs: PEEK_TIMEOUT_MS });
+  if (pgLast !== null) {
+    return formatQuotationNumber(SAVE_QUOTATION_PREFIX, pgLast + 1);
+  }
+
+  // Seed/fallback path (counter not yet initialized, or PG unavailable): scan
+  // the Quotation_No column of both sheets to find the max active sequence.
   const [saveNos, responseNos] = await Promise.all([
     db.getColumnValues("save", "Quotation_No"),
     db.getColumnValues("response", "Quotation_No"),
@@ -306,7 +318,13 @@ const getNextSaveQuotationNumber = async () => {
         SAVE_QUOTATION_PREFIX,
       );
 
-      if (sequence !== null && sequence > maxSequence) {
+      // Ignore out-of-band anomalies (e.g. year-like 2009/2010) so numbering
+      // continues the dense active series.
+      if (
+        sequence !== null &&
+        sequence > maxSequence &&
+        sequence <= SAVE_QUOTATION_MAX_SEQUENCE
+      ) {
         maxSequence = sequence;
       }
     });
@@ -316,6 +334,11 @@ const getNextSaveQuotationNumber = async () => {
 };
 
 const getNextResponseQuotationNumber = async () => {
+  const pgLast = await peekSequence("response", { timeoutMs: PEEK_TIMEOUT_MS });
+  if (pgLast !== null) {
+    return formatQuotationNumber(RESPONSE_QUOTATION_PREFIX, pgLast + 1);
+  }
+
   const responseNos = await db.getColumnValues("response", "Quotation_No");
   let maxSequence = RESPONSE_QUOTATION_MIN_SEQUENCE;
 
@@ -333,6 +356,9 @@ const getNextResponseQuotationNumber = async () => {
 // Atomically ALLOCATE the next save number (use at save time). Postgres is the
 // cross-instance source of truth; the sheet peek seeds it and acts as a floor.
 // Falls back to the sheet number if Postgres is unavailable.
+// Returns { quotationNo, viaPg }. viaPg=true means the number is globally unique
+// (Postgres atomic) and the caller may write in parallel; viaPg=false is the
+// sheet fallback (PG down) and the caller must serialize on this instance.
 const allocateSaveQuotationNumber = async () => {
   const previewNo = await getNextSaveQuotationNumber();
   const seedNext = parseQuotationSequence(previewNo, SAVE_QUOTATION_PREFIX);
@@ -345,9 +371,12 @@ const allocateSaveQuotationNumber = async () => {
     console.warn(
       `[quotationCache] SAVE number fallback (Postgres unavailable) -> ${previewNo}; cross-instance uniqueness NOT guaranteed`,
     );
-    return previewNo;
+    return { quotationNo: previewNo, viaPg: false };
   }
-  return formatQuotationNumber(SAVE_QUOTATION_PREFIX, sequence);
+  return {
+    quotationNo: formatQuotationNumber(SAVE_QUOTATION_PREFIX, sequence),
+    viaPg: true,
+  };
 };
 
 const allocateResponseQuotationNumber = async () => {
@@ -358,9 +387,12 @@ const allocateResponseQuotationNumber = async () => {
     console.warn(
       `[quotationCache] RESPONSE number fallback (Postgres unavailable) -> ${previewNo}; cross-instance uniqueness NOT guaranteed`,
     );
-    return previewNo;
+    return { quotationNo: previewNo, viaPg: false };
   }
-  return formatQuotationNumber(RESPONSE_QUOTATION_PREFIX, sequence);
+  return {
+    quotationNo: formatQuotationNumber(RESPONSE_QUOTATION_PREFIX, sequence),
+    viaPg: true,
+  };
 };
 
 module.exports = {
