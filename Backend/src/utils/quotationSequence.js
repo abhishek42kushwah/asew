@@ -128,4 +128,41 @@ const allocateSequence = async (series, seedNext) => {
   return null;
 };
 
-module.exports = { allocateSequence };
+/**
+ * Health probe for the Postgres counter. Confirms the PG* env vars are set and
+ * the DB is reachable, and returns the current counter values. Used by
+ * GET /api/quotation/db-health to verify the atomic allocator is live in prod.
+ */
+const checkHealth = async () => {
+  const configured = Boolean(process.env.PGHOST && process.env.PGDATABASE);
+  if (!configured) {
+    return {
+      ok: false,
+      configured: false,
+      error:
+        "PG* env vars (PGHOST/PGDATABASE/...) are not set — allocation is using the sheet fallback (no cross-instance guarantee).",
+    };
+  }
+
+  let client;
+  try {
+    client = await getPool().connect();
+    await ensureTable(client);
+    const { rows } = await client.query(
+      `SELECT series, last_seq FROM quotation_counter ORDER BY series`,
+    );
+    const counters = {};
+    rows.forEach((row) => {
+      counters[row.series] = Number(row.last_seq);
+    });
+    return { ok: true, configured: true, counters };
+  } catch (err) {
+    return { ok: false, configured: true, error: err.message };
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+};
+
+module.exports = { allocateSequence, checkHealth };

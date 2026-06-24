@@ -2,6 +2,7 @@ const {
   getNextSaveQuotationNumber,
   lookupQuotation,
 } = require("../utils/quotationCache");
+const { checkHealth } = require("../utils/quotationSequence");
 
 exports.getNextQuotationNumber = async (req, res) => {
   const startedAt = Date.now();
@@ -21,6 +22,11 @@ exports.getNextQuotationNumber = async (req, res) => {
       message: "Error calculating next quotation number",
     });
   }
+};
+
+exports.getDbHealth = async (req, res) => {
+  const result = await checkHealth();
+  res.status(result.ok ? 200 : 503).json(result);
 };
 
 exports.lookupQuotation = async (req, res) => {
