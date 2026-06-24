@@ -222,7 +222,18 @@ const upsertQuotationEntry = async (
   rows,
   appendMetadata,
 ) => {
-  const state = await ensureSheetLoaded(sheetName);
+  const state = getSheetState(sheetName);
+
+  // Only patch an already-warm cache. If the cache is cold or expired, skip —
+  // loading the entire sheet just to insert one freshly-written entry would put
+  // a full ~30k-row read back on the (otherwise fast) save path. The next read
+  // loads from the sheet, which already contains these rows.
+  const isWarm =
+    state.loadedAt && Date.now() - state.loadedAt < SHEET_CACHE_TTL_MS;
+  if (!isWarm) {
+    return null;
+  }
+
   const normalizedQuotationNo = quotationNo?.toString().trim();
   const spans =
     appendMetadata?.startRow && appendMetadata?.endRow

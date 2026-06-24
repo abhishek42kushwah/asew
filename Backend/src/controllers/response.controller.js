@@ -64,17 +64,25 @@ exports.createResponse = async (req, res) => {
 
     const quotationNo = data.Quotation_No?.toString().trim();
 
+    // New quotation: mint the number HERE (atomically, under a shared lock)
+    // rather than trusting the client-previewed number, and skip the expensive
+    // full-sheet delete since there are no existing rows. Edit: keep the number
+    // and replace. This stops two systems that saw the same preview from
+    // colliding on the same quotation.
+    const isNew = data.isNew === "true" || data.isNew === true || !quotationNo;
+
     // Serialize the sheet mutation per quotation so concurrent submits of the
     // same quotation can't double-append (each item written twice).
-    const lockKey = quotationNo || "__new_response__";
+    const lockKey = isNew ? "__new_response__" : quotationNo;
     const { resolvedQuotationNo, insertedCount } = await withQuotationLock(
       lockKey,
       async () => {
-        let resolvedNo = quotationNo;
+        let resolvedNo;
 
-        if (!resolvedNo) {
+        if (isNew) {
           resolvedNo = await getNextResponseQuotationNumber();
         } else {
+          resolvedNo = quotationNo;
           await deleteQuotationRows(SHEET_NAME, resolvedNo);
         }
 

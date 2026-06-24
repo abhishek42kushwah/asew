@@ -203,6 +203,15 @@ const QuotationForm = () => {
   const isSubmitting = submittingAction !== null;
   const isSubmittingRef = useRef(false);
 
+  // Numbering: the number shown on a fresh form is just a PREVIEW (max+1). The
+  // real number is minted by the backend at save time so two systems that saw
+  // the same preview don't collide. `autoNumberRef` holds that preview so we
+  // can tell "untouched auto number" (mint a fresh one) from a user-typed or
+  // loaded existing number (use as-is). `isExistingQuotation` is true once an
+  // existing quotation has been loaded for editing.
+  const autoNumberRef = useRef("");
+  const [isExistingQuotation, setIsExistingQuotation] = useState(false);
+
   // Helper to format date for HTML input (YYYY-MM-DD)
   const formatDateForInput = (dateStr) => {
     if (!dateStr) return "";
@@ -338,6 +347,9 @@ const QuotationForm = () => {
       discount: !!hasDiscount,
       gst: true,
     });
+
+    // Loaded an existing quotation -> saving updates it in place (keep number).
+    setIsExistingQuotation(true);
   };
 
   const handleSearchQuotation = async () => {
@@ -397,6 +409,8 @@ const QuotationForm = () => {
       const res = await axios.get(`${API_BASE_URL}/api/quotation/next-number`);
       if (res.data?.success && res.data.nextQuotationNo) {
         setFieldValue("Quotation_No", res.data.nextQuotationNo);
+        autoNumberRef.current = res.data.nextQuotationNo;
+        setIsExistingQuotation(false);
       }
     } catch (err) {
       console.error("Failed to fetch next quotation number:", err);
@@ -690,6 +704,10 @@ const QuotationForm = () => {
           gst: true,
         });
 
+        // Copy = a NEW quotation built from an old one's items -> mint a fresh
+        // number at save, don't overwrite the source quotation.
+        setIsExistingQuotation(false);
+
         toast.success(`Quotation "${searchNo}" copied successfully!`);
         setShowCopyModal(false);
         setCopyQuotationNo("");
@@ -783,6 +801,16 @@ const QuotationForm = () => {
       data.append("Total_GST", calculateTotalGST());
       data.append("Total_Amount", calculateGrandTotal());
 
+      // Tell the backend whether to mint a fresh number (new quotation) or
+      // update the existing one. New = not a loaded quotation AND the number is
+      // still the untouched auto-preview (or empty). A user-typed explicit
+      // number is treated as an update so it is preserved.
+      const trimmedNo = (values.Quotation_No || "").trim();
+      const isNewQuotation =
+        !isExistingQuotation &&
+        (trimmedNo === "" || trimmedNo === autoNumberRef.current.trim());
+      data.append("isNew", isNewQuotation ? "true" : "false");
+
       // Append COMPRESSED images only for valid items
       compressedImages.forEach((img) => {
         if (img) {
@@ -859,10 +887,16 @@ const QuotationForm = () => {
     if (actionType === "save") {
       dispatch(createSave(data))
         .unwrap()
-        .then(() => {
-          toast.success("Quotation saved successfully!", {
-            id: loadingToastId,
-          });
+        .then((result) => {
+          toast.success(
+            `Quotation ${result?.quotation_no || ""} saved successfully!`.replace(
+              "  ",
+              " ",
+            ),
+            {
+              id: loadingToastId,
+            },
+          );
           setTimeout(() => window.location.reload(), 1500);
         })
         .catch((error) => {
@@ -877,10 +911,16 @@ const QuotationForm = () => {
     } else if (actionType === "submit") {
       dispatch(createResponse(data))
         .unwrap()
-        .then(() => {
-          toast.success("Quotation response submitted successfully!", {
-            id: loadingToastId,
-          });
+        .then((result) => {
+          toast.success(
+            `Quotation response ${result?.quotation_no || ""} submitted successfully!`.replace(
+              "  ",
+              " ",
+            ),
+            {
+              id: loadingToastId,
+            },
+          );
           setTimeout(() => window.location.reload(), 1500);
         })
         .catch((error) => {
