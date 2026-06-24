@@ -3,9 +3,9 @@ const { uploadToDrive } = require("../utils/googleDrive");
 const { groupQuotationRows } = require("../utils/quotationFormatter");
 const { buildQuotationRows } = require("../utils/quotationPayload");
 const {
+  allocateResponseQuotationNumber,
   deleteQuotationRows,
   getItemMasterMap,
-  getNextResponseQuotationNumber,
   getQuotationEntry,
   upsertQuotationEntry,
 } = require("../utils/quotationCache");
@@ -80,7 +80,7 @@ exports.createResponse = async (req, res) => {
         let resolvedNo;
 
         if (isNew) {
-          resolvedNo = await getNextResponseQuotationNumber();
+          resolvedNo = await allocateResponseQuotationNumber();
         } else {
           resolvedNo = quotationNo;
           await deleteQuotationRows(SHEET_NAME, resolvedNo);

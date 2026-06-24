@@ -3,13 +3,13 @@ const { buildGroupedQuotation } = require("./quotationFormatter");
 const {
   SAVE_QUOTATION_MIN_SEQUENCE,
   SAVE_QUOTATION_PREFIX,
-  SAVE_QUOTATION_SERIES_PREFIX,
   RESPONSE_QUOTATION_MIN_SEQUENCE,
   RESPONSE_QUOTATION_PREFIX,
   formatQuotationNumber,
   parseQuotationSequence,
 } = require("./quotationNumber");
 const { buildItemMasterMap } = require("./quotationPayload");
+const { allocateSequence } = require("./quotationSequence");
 
 const ITEM_MASTER_TTL_MS = 5 * 60 * 1000;
 const SHEET_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -293,7 +293,11 @@ const getNextSaveQuotationNumber = async () => {
 
   [saveNos, responseNos].forEach((quotationNos) => {
     quotationNos.forEach((quotationNo) => {
-      if (!quotationNo || !quotationNo.startsWith(SAVE_QUOTATION_SERIES_PREFIX)) {
+      // Filter on the real prefix, not the zero-suffixed series prefix:
+      // formatQuotationNumber pads to 4 digits, so seq >= 1000 renders without
+      // a leading zero (".../1000") and would fail a "2026-27/QT/0" startsWith,
+      // silently dropping the highest numbers once the series crosses 999.
+      if (!quotationNo || !quotationNo.startsWith(SAVE_QUOTATION_PREFIX)) {
         return;
       }
 
@@ -326,7 +330,42 @@ const getNextResponseQuotationNumber = async () => {
   return formatQuotationNumber(RESPONSE_QUOTATION_PREFIX, maxSequence + 1);
 };
 
+// Atomically ALLOCATE the next save number (use at save time). Postgres is the
+// cross-instance source of truth; the sheet peek seeds it and acts as a floor.
+// Falls back to the sheet number if Postgres is unavailable.
+const allocateSaveQuotationNumber = async () => {
+  const previewNo = await getNextSaveQuotationNumber();
+  const seedNext = parseQuotationSequence(previewNo, SAVE_QUOTATION_PREFIX);
+  const sequence = await allocateSequence("save", seedNext);
+  if (sequence === null) {
+    // Postgres unavailable -> sheet number under the in-process lock only. This
+    // can DUPLICATE across instances during a PG outage (and reuse an in-flight
+    // number if PG was ahead of the sheet). Loud so a monitor can alert; it
+    // self-heals via the GREATEST floor once PG returns.
+    console.warn(
+      `[quotationCache] SAVE number fallback (Postgres unavailable) -> ${previewNo}; cross-instance uniqueness NOT guaranteed`,
+    );
+    return previewNo;
+  }
+  return formatQuotationNumber(SAVE_QUOTATION_PREFIX, sequence);
+};
+
+const allocateResponseQuotationNumber = async () => {
+  const previewNo = await getNextResponseQuotationNumber();
+  const seedNext = parseQuotationSequence(previewNo, RESPONSE_QUOTATION_PREFIX);
+  const sequence = await allocateSequence("response", seedNext);
+  if (sequence === null) {
+    console.warn(
+      `[quotationCache] RESPONSE number fallback (Postgres unavailable) -> ${previewNo}; cross-instance uniqueness NOT guaranteed`,
+    );
+    return previewNo;
+  }
+  return formatQuotationNumber(RESPONSE_QUOTATION_PREFIX, sequence);
+};
+
 module.exports = {
+  allocateResponseQuotationNumber,
+  allocateSaveQuotationNumber,
   deleteQuotationRows,
   getItemMasterMap,
   getNextResponseQuotationNumber,
