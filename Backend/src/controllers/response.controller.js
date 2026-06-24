@@ -71,46 +71,56 @@ exports.createResponse = async (req, res) => {
     // colliding on the same quotation.
     const isNew = data.isNew === "true" || data.isNew === true || !quotationNo;
 
-    // Serialize the sheet mutation per quotation so concurrent submits of the
-    // same quotation can't double-append (each item written twice).
-    const lockKey = isNew ? "__new_response__" : quotationNo;
-    const { resolvedQuotationNo, insertedCount } = await withQuotationLock(
-      lockKey,
-      async () => {
-        let resolvedNo;
+    const writeRows = async (resolvedNo) => {
+      const rowsToInsert = buildQuotationRows({
+        data,
+        quotationNo: resolvedNo,
+        masterMap,
+        generatedPdfUrl: assets.generatedPdfUrl,
+        imageMap: assets.imageMap,
+      });
 
-        if (isNew) {
-          resolvedNo = await allocateResponseQuotationNumber();
-        } else {
-          resolvedNo = quotationNo;
-          await deleteQuotationRows(SHEET_NAME, resolvedNo);
-        }
+      const appendMetadata = await db.insertMultipleByHeader(
+        SHEET_NAME,
+        rowsToInsert,
+      );
+      await upsertQuotationEntry(
+        SHEET_NAME,
+        resolvedNo,
+        rowsToInsert,
+        appendMetadata,
+      );
 
-        const rowsToInsert = buildQuotationRows({
-          data,
-          quotationNo: resolvedNo,
-          masterMap,
-          generatedPdfUrl: assets.generatedPdfUrl,
-          imageMap: assets.imageMap,
+      return {
+        resolvedQuotationNo: resolvedNo,
+        insertedCount: rowsToInsert.length,
+      };
+    };
+
+    let outcome;
+    if (!isNew) {
+      // Edit: serialize per quotation so delete+append can't race for the same No.
+      outcome = await withQuotationLock(quotationNo, async () => {
+        await deleteQuotationRows(SHEET_NAME, quotationNo);
+        return writeRows(quotationNo);
+      });
+    } else {
+      const alloc = await allocateResponseQuotationNumber();
+      if (alloc.viaPg) {
+        // Globally-unique number -> concurrent new submits run in parallel.
+        outcome = await withQuotationLock(alloc.quotationNo, () =>
+          writeRows(alloc.quotationNo),
+        );
+      } else {
+        // Fallback (Postgres down): serialize and re-allocate inside the lock.
+        outcome = await withQuotationLock("__new_response__", async () => {
+          const fresh = await allocateResponseQuotationNumber();
+          return writeRows(fresh.quotationNo);
         });
+      }
+    }
 
-        const appendMetadata = await db.insertMultipleByHeader(
-          SHEET_NAME,
-          rowsToInsert,
-        );
-        await upsertQuotationEntry(
-          SHEET_NAME,
-          resolvedNo,
-          rowsToInsert,
-          appendMetadata,
-        );
-
-        return {
-          resolvedQuotationNo: resolvedNo,
-          insertedCount: rowsToInsert.length,
-        };
-      },
-    );
+    const { resolvedQuotationNo, insertedCount } = outcome;
 
     res.status(201).json({
       success: true,

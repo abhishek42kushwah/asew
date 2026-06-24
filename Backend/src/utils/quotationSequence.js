@@ -26,12 +26,18 @@ let tableEnsured = false;
 
 const getPool = () => {
   if (!pool) {
+    // Prefer a single DATABASE_URL (point it at Neon's pooled "-pooler"
+    // endpoint); otherwise fall back to discrete PG* env vars.
+    const connectionString = process.env.DATABASE_URL || undefined;
+    // Neon always requires TLS; an explicit ssl object overrides the URL's
+    // sslmode and sidesteps cert-verification edge cases on the pooler.
+    const useSsl = connectionString
+      ? true
+      : Boolean(process.env.PGSSLMODE && process.env.PGSSLMODE !== "disable");
+
     pool = new Pool({
-      // Neon and most managed Postgres require TLS. PGSSLMODE=disable opts out.
-      ssl:
-        process.env.PGSSLMODE && process.env.PGSSLMODE !== "disable"
-          ? { rejectUnauthorized: false }
-          : undefined,
+      ...(connectionString ? { connectionString } : {}),
+      ssl: useSsl ? { rejectUnauthorized: false } : undefined,
       // Each serverless invocation is single-request; one connection is enough,
       // and keeps total connections low across many Vercel instances.
       max: 1,
@@ -128,4 +134,92 @@ const allocateSequence = async (series, seedNext) => {
   return null;
 };
 
-module.exports = { allocateSequence };
+const isConfigured = () =>
+  Boolean(
+    process.env.DATABASE_URL ||
+      (process.env.PGHOST && process.env.PGDATABASE),
+  );
+
+const withTimeout = (promise, ms) =>
+  ms > 0
+    ? Promise.race([
+        promise,
+        new Promise((resolve) => setTimeout(() => resolve(null), ms)),
+      ])
+    : promise;
+
+/**
+ * Fast READ of the current counter for a series WITHOUT incrementing — a single
+ * indexed-row lookup. Used for the form's "next number" preview so it doesn't
+ * scan ~30k sheet cells. Returns the last allocated sequence, or null if the
+ * counter is not yet seeded / Postgres is unavailable / the read exceeds
+ * timeoutMs (caller then falls back to the sheet scan).
+ */
+const peekSequence = async (series, { timeoutMs = 0 } = {}) => {
+  if (!isConfigured()) {
+    return null;
+  }
+
+  const run = (async () => {
+    let client;
+    try {
+      client = await getPool().connect();
+      const { rows } = await client.query(
+        `SELECT last_seq FROM quotation_counter WHERE series = $1`,
+        [series],
+      );
+      return rows.length ? Number(rows[0].last_seq) : null;
+    } catch (err) {
+      // Table may not exist yet, or PG unreachable -> caller falls back.
+      return null;
+    } finally {
+      if (client) {
+        client.release();
+      }
+    }
+  })();
+
+  return withTimeout(run, timeoutMs);
+};
+
+/**
+ * Health probe for the Postgres counter. Confirms the PG* env vars are set and
+ * the DB is reachable, and returns the current counter values. Used by
+ * GET /api/quotation/db-health to verify the atomic allocator is live in prod.
+ */
+const checkHealth = async () => {
+  const configured = Boolean(
+    process.env.DATABASE_URL ||
+      (process.env.PGHOST && process.env.PGDATABASE),
+  );
+  if (!configured) {
+    return {
+      ok: false,
+      configured: false,
+      error:
+        "Neither DATABASE_URL nor PG* env vars are set — allocation is using the sheet fallback (no cross-instance guarantee).",
+    };
+  }
+
+  let client;
+  try {
+    client = await getPool().connect();
+    await ensureTable(client);
+    const { rows } = await client.query(
+      `SELECT series, last_seq FROM quotation_counter ORDER BY series`,
+    );
+    const counters = {};
+    rows.forEach((row) => {
+      counters[row.series] = Number(row.last_seq);
+    });
+    return { ok: true, configured: true, counters };
+  } catch (err) {
+    return { ok: false, configured: true, error: err.message };
+  } finally {
+    if (client) {
+      client.release();
+    }
+  }
+};
+
+module.exports = { allocateSequence, checkHealth, peekSequence };
