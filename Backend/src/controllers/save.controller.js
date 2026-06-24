@@ -3,9 +3,9 @@ const { uploadToDrive } = require("../utils/googleDrive");
 const { groupQuotationRows } = require("../utils/quotationFormatter");
 const { buildQuotationRows } = require("../utils/quotationPayload");
 const {
+  allocateSaveQuotationNumber,
   deleteQuotationRows,
   getItemMasterMap,
-  getNextSaveQuotationNumber,
   getQuotationEntry,
   upsertQuotationEntry,
 } = require("../utils/quotationCache");
@@ -80,15 +80,23 @@ exports.createSave = async (req, res) => {
     // Serialize the sheet mutation per quotation so concurrent saves of the
     // same quotation can't double-append. Asset uploads above are already done
     // and run in parallel; only the delete+append needs ordering.
-    const lockKey = quotationNo || "__new_save__";
+    // A brand-new quotation mints its number HERE, at save time, atomically
+    // under a shared lock — instead of trusting the number the client previewed
+    // when the form opened. Two systems that opened the form and saw the same
+    // preview no longer write to the same quotation. A new quotation also skips
+    // the (expensive, full-sheet) delete since it has no existing rows to
+    // replace. An edit (isNew=false) keeps the provided number and replaces.
+    const isNew = data.isNew === "true" || data.isNew === true || !quotationNo;
+    const lockKey = isNew ? "__new_save__" : quotationNo;
     const { resolvedQuotationNo, insertedCount } = await withQuotationLock(
       lockKey,
       async () => {
-        let resolvedNo = quotationNo;
+        let resolvedNo;
 
-        if (!resolvedNo) {
-          resolvedNo = await getNextSaveQuotationNumber();
+        if (isNew) {
+          resolvedNo = await allocateSaveQuotationNumber();
         } else {
+          resolvedNo = quotationNo;
           const deleteResult = await deleteQuotationRows(SHEET_NAME, resolvedNo);
           // [DUP-DEBUG] How many existing rows were removed before re-inserting.
           // If deleted=0 here but old rows exist in the sheet, the new rows will
