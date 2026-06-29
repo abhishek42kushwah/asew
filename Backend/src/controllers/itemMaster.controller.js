@@ -83,6 +83,11 @@ exports.getItems = async (req, res) => {
       return res.json(cachedItems);
     }
 
+    // Items are keyed by the live Item_Master header row. If the dropdown shows
+    // blank names, the header A1 is corrupted (must be "ITEM_NAME"): the
+    // frontend reads item.ITEM_NAME. createItemMasterSheet rewrites the header,
+    // but the cold-start bootstrap is gated (see Index.js RUN_SHEET_MIGRATION),
+    // so a corrupted header no longer self-heals — re-run the migration to fix.
     const items = await db.getAll(SHEET_NAME);
     cachedItems = items;
     lastItemsFetch = now;
