@@ -293,11 +293,11 @@ const QuotationForm = () => {
       Freight_Charges: header.Freight_Charges || 0,
       FreightType: header.Freight_Type || header.FreightType || "Amount",
       Freight_Note: header.Freight_Note || "",
-      Freight_GST_Percent: header.Freight_GST_Percent || 18,
+      Freight_GST_Percent: parseFloat(header.Freight_GST_Percent) || 18,
       Packaging_Charges: header.Packaging_Charges || 0,
       PackagingType: header.Packaging_Type || header.PackagingType || "Amount",
       Packaging_Note: header.Packaging_Note || "",
-      Packaging_GST_Percent: header.Packaging_GST_Percent || 18,
+      Packaging_GST_Percent: parseFloat(header.Packaging_GST_Percent) || 18,
       Term_Tax: header.Term_Tax || prev.Term_Tax,
       Term_Payment: header.Term_Payment || prev.Term_Payment,
       Term_Delivery: header.Term_Delivery || prev.Term_Delivery,
@@ -560,17 +560,21 @@ const QuotationForm = () => {
   const calculateTotalGST = () => {
     let totalGST = values.labEquipment.reduce((sum, item) => sum + (item.gst_amount || 0), 0);
     
-    // Freight GST
+    // Freight GST. Guard the parseFloat RESULT (|| 0 outside), not the input —
+    // a stored non-numeric like "NaN" is truthy and would slip through
+    // parseFloat(value || 0) as NaN, poisoning the whole total (0 * NaN = NaN).
     const freightVal = parseFloat(values.Freight_Charges) || 0;
     const subtotal = calculateSubtotal();
     const actualFreight = values.FreightType === "%" ? subtotal * (freightVal / 100) : freightVal;
-    const freightGST = actualFreight * (parseFloat(values.Freight_GST_Percent || 0) / 100);
-    
+    const freightPct = parseFloat(values.Freight_GST_Percent) || 0;
+    const freightGST = actualFreight * (freightPct / 100);
+
     // Packaging GST
     const packagingVal = parseFloat(values.Packaging_Charges) || 0;
     const actualPackaging = values.PackagingType === "%" ? subtotal * (packagingVal / 100) : packagingVal;
-    const packagingGST = actualPackaging * (parseFloat(values.Packaging_GST_Percent || 0) / 100);
-    
+    const packagingPct = parseFloat(values.Packaging_GST_Percent) || 0;
+    const packagingGST = actualPackaging * (packagingPct / 100);
+
     return totalGST + freightGST + packagingGST;
   };
 
@@ -649,11 +653,11 @@ const QuotationForm = () => {
           Freight_Charges: header.Freight_Charges || 0,
           FreightType: header.FreightType || "Amount",
           Freight_Note: header.Freight_Note || "",
-          Freight_GST_Percent: header.Freight_GST_Percent || 18,
+          Freight_GST_Percent: parseFloat(header.Freight_GST_Percent) || 18,
           Packaging_Charges: header.Packaging_Charges || 0,
           PackagingType: header.Packaging_Type || "Amount",
           Packaging_Note: header.Packaging_Note || "",
-          Packaging_GST_Percent: header.Packaging_GST_Percent || 18,
+          Packaging_GST_Percent: parseFloat(header.Packaging_GST_Percent) || 18,
           Term_Tax: header.Term_Tax || prev.Term_Tax,
           Term_Payment: header.Term_Payment || prev.Term_Payment,
           Term_Delivery: header.Term_Delivery || prev.Term_Delivery,
