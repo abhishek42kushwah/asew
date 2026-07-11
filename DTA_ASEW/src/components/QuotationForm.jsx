@@ -252,6 +252,34 @@ const QuotationForm = () => {
     return dateStr;
   };
 
+  // Upload the PDF straight to Google Drive (bypasses our server / Vercel's
+  // 4.5MB request cap) for quotations too large to attach in the save request:
+  //   1. ask the backend for a resumable upload session URL
+  //   2. PUT the PDF bytes directly to Google
+  //   3. tell the backend to make it public + write the link into the sheet
+  const uploadPdfDirect = async (pdfBlob, filename, quotationNo, source) => {
+    const sess = await axios.post(`${API_BASE_URL}/api/quotation/pdf-session`, {
+      filename,
+      mimeType: "application/pdf",
+    });
+    const uploadUrl = sess.data?.uploadUrl;
+    if (!uploadUrl) throw new Error("No upload URL returned");
+
+    const put = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": "application/pdf" },
+      body: pdfBlob,
+    });
+    if (!put.ok) throw new Error(`Drive upload failed: ${put.status}`);
+    const file = await put.json();
+
+    await axios.post(`${API_BASE_URL}/api/quotation/pdf-finalize`, {
+      fileId: file.id,
+      quotationNo,
+      source,
+    });
+  };
+
   // Resolve a sane per-item GST % from possibly-missing/corrupt stored data.
   // Total_Price is the customer-facing quoted line total (the value in the
   // generated PDF), so it is the source of truth — derive the rate from it:
@@ -786,9 +814,12 @@ const QuotationForm = () => {
 
     const loadingToastId = toast.loading("Processing quotation...");
     const data = new FormData();
-    // Set when the PDF/images are too big for Vercel's request-body cap and get
+    // Set when the images are too big for Vercel's request-body cap and get
     // dropped so the row data can still save; surfaced in the success toast.
     let pendingDroppedNote = "";
+    // Set when the PDF is too big for the save request -> uploaded directly to
+    // Drive after the data save.
+    let directPdf = null;
 
     try {
       // 1. Compress all images first to reduce payload size
@@ -877,13 +908,15 @@ const QuotationForm = () => {
       if (imagesBytes + pdfBytes <= PAYLOAD_LIMIT) {
         compressedImages.forEach((img) => img && data.append("Image_URL", img));
         data.append("Generated_PDF", pdfFile);
-      } else if (imagesBytes <= PAYLOAD_LIMIT) {
-        compressedImages.forEach((img) => img && data.append("Image_URL", img));
-        pendingDroppedNote =
-          " — PDF too large to attach, so it was skipped (data saved).";
       } else {
-        pendingDroppedNote =
-          " — PDF and images too large to attach, so they were skipped (data saved).";
+        // PDF too big for the save request -> upload it straight to Drive after
+        // the (small) data save. Attach images in-request only if they fit.
+        if (imagesBytes <= PAYLOAD_LIMIT) {
+          compressedImages.forEach((img) => img && data.append("Image_URL", img));
+        } else {
+          pendingDroppedNote = " — images too large to attach (data saved).";
+        }
+        directPdf = { blob: pdfBlob, filename: pdfFilename };
       }
 
       // Automatically sync customer details to Customer Master
@@ -924,16 +957,29 @@ const QuotationForm = () => {
     if (actionType === "save") {
       dispatch(createSave(data))
         .unwrap()
-        .then((result) => {
+        .then(async (result) => {
+          const quotationNo = result?.quotation_no || "";
+          let note = pendingDroppedNote;
+          if (directPdf && quotationNo) {
+            try {
+              toast.loading("Uploading PDF…", { id: loadingToastId });
+              await uploadPdfDirect(
+                directPdf.blob,
+                directPdf.filename,
+                quotationNo,
+                "save",
+              );
+            } catch (e) {
+              console.error("[PDF direct upload] failed:", e);
+              note += " — PDF upload failed; open the quotation to regenerate.";
+            }
+          }
           toast.success(
-            `Quotation ${result?.quotation_no || ""} saved successfully!${pendingDroppedNote}`.replace(
+            `Quotation ${quotationNo} saved successfully!${note}`.replace(
               "  ",
               " ",
             ),
-            {
-              id: loadingToastId,
-              duration: pendingDroppedNote ? 8000 : undefined,
-            },
+            { id: loadingToastId, duration: note ? 8000 : undefined },
           );
           setTimeout(() => window.location.reload(), 1500);
         })
@@ -949,16 +995,29 @@ const QuotationForm = () => {
     } else if (actionType === "submit") {
       dispatch(createResponse(data))
         .unwrap()
-        .then((result) => {
+        .then(async (result) => {
+          const quotationNo = result?.quotation_no || "";
+          let note = pendingDroppedNote;
+          if (directPdf && quotationNo) {
+            try {
+              toast.loading("Uploading PDF…", { id: loadingToastId });
+              await uploadPdfDirect(
+                directPdf.blob,
+                directPdf.filename,
+                quotationNo,
+                "response",
+              );
+            } catch (e) {
+              console.error("[PDF direct upload] failed:", e);
+              note += " — PDF upload failed; open the quotation to regenerate.";
+            }
+          }
           toast.success(
-            `Quotation response ${result?.quotation_no || ""} submitted successfully!${pendingDroppedNote}`.replace(
+            `Quotation response ${quotationNo} submitted successfully!${note}`.replace(
               "  ",
               " ",
             ),
-            {
-              id: loadingToastId,
-              duration: pendingDroppedNote ? 8000 : undefined,
-            },
+            { id: loadingToastId, duration: note ? 8000 : undefined },
           );
           setTimeout(() => window.location.reload(), 1500);
         })

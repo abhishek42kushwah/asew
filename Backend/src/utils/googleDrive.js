@@ -116,6 +116,65 @@ const uploadToDrive = async (fileBuffer, filename, mimeType) => {
 };
 
 /**
+ * Create a Drive RESUMABLE upload session and return its upload URL. The
+ * browser then PUTs the file bytes straight to this URL (bypassing our server /
+ * Vercel's 4.5MB body limit), so quotations with huge PDFs can still be stored.
+ */
+const createResumableUpload = async (filename, mimeType = "application/pdf") => {
+  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+  if (!folderId) {
+    throw new Error("GOOGLE_DRIVE_FOLDER_ID is not set");
+  }
+
+  const { token } = await oauth2Client.getAccessToken();
+  if (!token) {
+    throw new Error("Could not obtain a Drive access token");
+  }
+
+  const res = await fetch(
+    "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,webViewLink,webContentLink",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json; charset=UTF-8",
+        "X-Upload-Content-Type": mimeType,
+      },
+      body: JSON.stringify({ name: filename, parents: [folderId] }),
+    },
+  );
+
+  if (!res.ok) {
+    throw new Error(
+      `Resumable session create failed: ${res.status} ${await res.text()}`,
+    );
+  }
+
+  const uploadUrl = res.headers.get("location");
+  if (!uploadUrl) {
+    throw new Error("Drive did not return a resumable upload URL");
+  }
+  return uploadUrl;
+};
+
+/**
+ * Make an uploaded file public and return its shareable link. Used to finalize
+ * a browser-direct resumable upload.
+ */
+const finalizeDriveFile = async (fileId) => {
+  await drive.permissions.create({
+    fileId,
+    requestBody: { role: "reader", type: "anyone" },
+    fields: "id",
+  });
+  const { data } = await drive.files.get({
+    fileId,
+    fields: "id, webViewLink, webContentLink",
+  });
+  return data.webViewLink || data.webContentLink;
+};
+
+/**
  * Test the connection to Google Drive
  */
 const testDriveConnection = async () => {
@@ -182,4 +241,11 @@ const formatDuration = (ms) => {
   return parts.join(", ");
 };
 
-module.exports = { uploadToDrive, testDriveConnection, getFileStream ,formatDuration};
+module.exports = {
+  uploadToDrive,
+  testDriveConnection,
+  getFileStream,
+  formatDuration,
+  createResumableUpload,
+  finalizeDriveFile,
+};
