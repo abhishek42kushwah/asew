@@ -14,6 +14,7 @@ const mapLegacyItem = (item) => ({
     item.discount_percent || item.discount || item.Item_Discount || 0,
   GST_Percent: item.gst_percent || item.GST_Percent || 0,
   GST_Amount: item.gst_amount || item.GST_Amount || 0,
+  Image_URL: item.Image_URL || item.image_url || "",
 });
 
 const resolveItemName = ({
@@ -189,6 +190,7 @@ const groupQuotationRows = (rows) => {
       Item_Discount: row.Item_Discount,
       GST_Percent: row.Item_GST_Percent || row.GST_Percent,
       GST_Amount: row.Item_GST_Amount || row.GST_Amount,
+      Image_URL: row.Image_URL || "",
     });
   });
 

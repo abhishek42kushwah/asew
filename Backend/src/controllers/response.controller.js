@@ -19,25 +19,25 @@ const uploadQuotationAssets = async (files = {}) => {
 
   imageFiles.forEach((file, index) => {
     uploadPromises.push(
-      uploadToDrive(file.buffer, file.originalname, file.mimetype).then((url) => ({
-        type: "image",
-        index,
-        url,
-      })),
+      uploadToDrive(file.buffer, file.originalname, file.mimetype)
+        .then((url) => ({ type: "image", index, url }))
+        // A single failed upload must NOT abort the whole save (which would lose
+        // all row data). Drop it -> that row just gets a blank Image_URL;
+        // imageMap stays keyed by the original index so survivors still align.
+        .catch(() => null),
     );
   });
 
   if (files.Generated_PDF?.[0]) {
     const file = files.Generated_PDF[0];
     uploadPromises.push(
-      uploadToDrive(file.buffer, file.originalname, file.mimetype).then((url) => ({
-        type: "pdf",
-        url,
-      })),
+      uploadToDrive(file.buffer, file.originalname, file.mimetype)
+        .then((url) => ({ type: "pdf", url }))
+        .catch(() => null),
     );
   }
 
-  const uploadResults = await Promise.all(uploadPromises);
+  const uploadResults = (await Promise.all(uploadPromises)).filter(Boolean);
   const imageMap = new Map(
     uploadResults
       .filter((result) => result.type === "image")
@@ -76,7 +76,9 @@ exports.createResponse = async (req, res) => {
         data,
         quotationNo: resolvedNo,
         masterMap,
-        generatedPdfUrl: assets.generatedPdfUrl,
+        // A large quotation uploads its PDF directly to Drive and sends only the
+        // link (Generated_PDF_URL); otherwise the PDF file was uploaded here.
+        generatedPdfUrl: assets.generatedPdfUrl || data.Generated_PDF_URL || "",
         imageMap: assets.imageMap,
       });
 

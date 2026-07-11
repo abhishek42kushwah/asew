@@ -252,32 +252,44 @@ const QuotationForm = () => {
     return dateStr;
   };
 
-  // Upload the PDF straight to Google Drive (bypasses our server / Vercel's
-  // 4.5MB request cap) for quotations too large to attach in the save request:
+  // Upload any file (PDF or image) straight to Google Drive, bypassing our
+  // server / Vercel's 4.5MB request cap, and return its public link:
   //   1. ask the backend for a resumable upload session URL
-  //   2. PUT the PDF bytes directly to Google
-  //   3. tell the backend to make it public + write the link into the sheet
-  const uploadPdfDirect = async (pdfBlob, filename, quotationNo, source) => {
-    const sess = await axios.post(`${API_BASE_URL}/api/quotation/pdf-session`, {
+  //   2. PUT the bytes directly to Google
+  //   3. ask the backend to make it public + return the shareable link
+  const uploadFileOnce = async (blob, filename, mimeType) => {
+    const sess = await axios.post(`${API_BASE_URL}/api/quotation/drive-session`, {
       filename,
-      mimeType: "application/pdf",
+      mimeType,
     });
     const uploadUrl = sess.data?.uploadUrl;
     if (!uploadUrl) throw new Error("No upload URL returned");
 
     const put = await fetch(uploadUrl, {
       method: "PUT",
-      headers: { "Content-Type": "application/pdf" },
-      body: pdfBlob,
+      headers: { "Content-Type": mimeType },
+      body: blob,
     });
     if (!put.ok) throw new Error(`Drive upload failed: ${put.status}`);
     const file = await put.json();
 
-    await axios.post(`${API_BASE_URL}/api/quotation/pdf-finalize`, {
-      fileId: file.id,
-      quotationNo,
-      source,
-    });
+    const fin = await axios.post(
+      `${API_BASE_URL}/api/quotation/drive-finalize`,
+      { fileId: file.id },
+    );
+    if (!fin.data?.url) throw new Error("No link returned");
+    return fin.data.url;
+  };
+
+  // One retry with a short backoff — Drive rate-limits / cold starts are common
+  // when a quotation has many images.
+  const uploadFileToDrive = async (blob, filename, mimeType) => {
+    try {
+      return await uploadFileOnce(blob, filename, mimeType);
+    } catch {
+      await new Promise((r) => setTimeout(r, 1200));
+      return uploadFileOnce(blob, filename, mimeType);
+    }
   };
 
   // Resolve a sane per-item GST % from possibly-missing/corrupt stored data.
@@ -369,7 +381,9 @@ const QuotationForm = () => {
           discount_percent,
           gst_percent,
           gst_amount: calc_gst_amount,
-          image: null,
+          // Keep the already-uploaded image link so re-saving an edit doesn't
+          // wipe it; handleSubmit passes an http(s) string through as-is.
+          image: item.Image_URL || null,
         };
       }),
     }));
@@ -727,7 +741,7 @@ const QuotationForm = () => {
               discount_percent,
               gst_percent,
               gst_amount: calc_gst_amount,
-              image: null,
+              image: item.Image_URL || null,
             };
           }),
         }));
@@ -814,12 +828,8 @@ const QuotationForm = () => {
 
     const loadingToastId = toast.loading("Processing quotation...");
     const data = new FormData();
-    // Set when the images are too big for Vercel's request-body cap and get
-    // dropped so the row data can still save; surfaced in the success toast.
+    // Surfaced in the success toast when a binary couldn't be uploaded.
     let pendingDroppedNote = "";
-    // Set when the PDF is too big for the save request -> uploaded directly to
-    // Drive after the data save.
-    let directPdf = null;
 
     try {
       // 1. Compress all images first to reduce payload size
@@ -845,11 +855,9 @@ const QuotationForm = () => {
         }
       });
 
-      const itemsForJSON = validItems.map((item, idx) => ({
-        ...item,
-        image: !!compressedImages[idx], // Convert to boolean flag for serialization
-      }));
-      data.append("ITEMS", JSON.stringify(itemsForJSON));
+      // ITEMS is appended AFTER the size check below (its per-item `image` is a
+      // boolean when the image bytes ride along, or a Drive URL when uploaded
+      // directly for a too-large quotation).
       data.append("Subtotal", calculateSubtotal());
       data.append("Total_GST", calculateTotalGST());
       data.append("Total_Amount", calculateGrandTotal());
@@ -869,18 +877,14 @@ const QuotationForm = () => {
       // Send the column visibility settings to the backend
       data.append("showFields", JSON.stringify(showFields));
 
-      // 3. Generate PDF
+      // 3. Generate PDF. Guard it: if PDF generation throws for some data shape,
+      // we must STILL save the row data (just without a PDF) rather than abort
+      // the whole submit and lose everything the user entered.
       const totals = {
         subtotal: calculateSubtotal(),
         totalGST: calculateTotalGST(),
         grandTotal: calculateGrandTotal(),
       };
-      const pdfBlob = await generatePDFBlob(
-        values,
-        validItems,
-        showFields,
-        totals,
-      );
       const sanitizedQuotationNo = (values.Quotation_No || "New").replace(
         /\//g,
         "_",
@@ -890,34 +894,109 @@ const QuotationForm = () => {
       ).replace(/[^a-zA-Z0-9]/g, "_");
       const pdfFilename = `${sanitizedCustomerName}__${sanitizedQuotationNo}.pdf`;
 
-      const pdfFile = new File([pdfBlob], pdfFilename, {
-        type: "application/pdf",
-      });
+      let pdfBlob = null;
+      let pdfFile = null;
+      try {
+        pdfBlob = await generatePDFBlob(values, validItems, showFields, totals);
+        pdfFile = new File([pdfBlob], pdfFilename, {
+          type: "application/pdf",
+        });
+      } catch (e) {
+        console.error("[PDF generation] failed:", e);
+        pendingDroppedNote =
+          " — PDF could not be generated; open the quotation to regenerate.";
+      }
 
-      // Vercel caps the request body at ~4.5 MB. A large quotation's PDF (and
-      // images) can exceed that -> FUNCTION_PAYLOAD_TOO_LARGE, which fails the
-      // ENTIRE save and loses the user's data. So attach the PDF/images only if
-      // they fit, and ALWAYS let the (small) row data save. Report what dropped.
+      // Vercel caps the request body at ~4.5 MB. If the PDF + images fit, send
+      // them in the save request (the server uploads them to Drive). If not,
+      // upload each binary STRAIGHT to Drive first and send only the resulting
+      // links — the save request stays tiny, so any size works and the data
+      // always saves.
       const PAYLOAD_LIMIT = 4 * 1024 * 1024; // safe margin under Vercel's 4.5MB
       const imagesBytes = compressedImages.reduce(
         (sum, img) => sum + (img?.size || 0),
         0,
       );
-      const pdfBytes = pdfBlob.size;
+      const pdfBytes = pdfBlob ? pdfBlob.size : 0;
 
+      // An item image can be a File/Blob (newly picked), an http URL string
+      // (already on Drive from a prior save), or null.
+      const isFileImage = (img) => img && typeof img !== "string";
+
+      let itemsForJSON;
       if (imagesBytes + pdfBytes <= PAYLOAD_LIMIT) {
-        compressedImages.forEach((img) => img && data.append("Image_URL", img));
-        data.append("Generated_PDF", pdfFile);
+        // Small enough: attach file images (server uploads them). Existing URL
+        // images pass through as-is; the PDF is attached if it was generated.
+        itemsForJSON = validItems.map((item, idx) => {
+          const img = compressedImages[idx];
+          return {
+            ...item,
+            image: typeof img === "string" ? img : isFileImage(img),
+          };
+        });
+        compressedImages.forEach((img) => {
+          if (isFileImage(img)) data.append("Image_URL", img);
+        });
+        if (pdfFile) data.append("Generated_PDF", pdfFile);
       } else {
-        // PDF too big for the save request -> upload it straight to Drive after
-        // the (small) data save. Attach images in-request only if they fit.
-        if (imagesBytes <= PAYLOAD_LIMIT) {
-          compressedImages.forEach((img) => img && data.append("Image_URL", img));
-        } else {
-          pendingDroppedNote = " — images too large to attach (data saved).";
+        // Too big: upload each file image + the PDF directly to Drive and embed
+        // links. Existing URL images are kept as-is. Throttle to small batches
+        // so many images don't exhaust connections / hit Drive rate limits.
+        toast.loading("Uploading files…", { id: loadingToastId });
+        let failedImages = 0;
+        const imageUrls = new Array(compressedImages.length).fill(null);
+        const BATCH = 4;
+        for (let i = 0; i < compressedImages.length; i += BATCH) {
+          const slice = compressedImages.slice(i, i + BATCH);
+          await Promise.all(
+            slice.map(async (img, j) => {
+              const idx = i + j;
+              if (!img) return;
+              if (typeof img === "string") {
+                imageUrls[idx] = img; // already on Drive
+                return;
+              }
+              try {
+                imageUrls[idx] = await uploadFileToDrive(
+                  img,
+                  `${sanitizedCustomerName}__${sanitizedQuotationNo}__img${idx}`,
+                  img.type || "image/jpeg",
+                );
+              } catch (e) {
+                console.error("[image direct upload] failed:", e);
+                failedImages += 1;
+              }
+            }),
+          );
+          toast.loading(
+            `Uploading files… ${Math.min(i + BATCH, compressedImages.length)}/${compressedImages.length}`,
+            { id: loadingToastId },
+          );
         }
-        directPdf = { blob: pdfBlob, filename: pdfFilename };
+        itemsForJSON = validItems.map((item, idx) => ({
+          ...item,
+          image: imageUrls[idx] || false,
+        }));
+
+        if (pdfBlob) {
+          try {
+            const pdfUrl = await uploadFileToDrive(
+              pdfBlob,
+              pdfFilename,
+              "application/pdf",
+            );
+            data.append("Generated_PDF_URL", pdfUrl);
+          } catch (e) {
+            console.error("[pdf direct upload] failed:", e);
+            pendingDroppedNote =
+              " — PDF upload failed; open the quotation to regenerate.";
+          }
+        }
+        if (failedImages > 0) {
+          pendingDroppedNote += ` — ${failedImages} image(s) could not be uploaded.`;
+        }
       }
+      data.append("ITEMS", JSON.stringify(itemsForJSON));
 
       // Automatically sync customer details to Customer Master
       if (values.Customer_Name) {
@@ -943,12 +1022,9 @@ const QuotationForm = () => {
       }
     } catch (err) {
       console.error("Processing failed:", err);
-      toast.error(
-        "Failed to generate quotation PDF. Please try again.",
-        {
-          id: loadingToastId,
-        },
-      );
+      toast.error("Failed to prepare quotation. Please try again.", {
+        id: loadingToastId,
+      });
       isSubmittingRef.current = false;
       setSubmittingAction(null);
       return;
@@ -957,31 +1033,18 @@ const QuotationForm = () => {
     if (actionType === "save") {
       dispatch(createSave(data))
         .unwrap()
-        .then(async (result) => {
-          const quotationNo = result?.quotation_no || "";
-          let note = pendingDroppedNote;
-          if (directPdf && quotationNo) {
-            try {
-              toast.loading("Uploading PDF…", { id: loadingToastId });
-              await uploadPdfDirect(
-                directPdf.blob,
-                directPdf.filename,
-                quotationNo,
-                "save",
-              );
-            } catch (e) {
-              console.error("[PDF direct upload] failed:", e);
-              note += " — PDF upload failed; open the quotation to regenerate.";
-            }
-          }
+        .then((result) => {
           toast.success(
-            `Quotation ${quotationNo} saved successfully!${note}`.replace(
-              "  ",
+            `Quotation ${result?.quotation_no || ""} saved successfully!${pendingDroppedNote}`.replace(
+              /\s{2,}/g,
               " ",
             ),
-            { id: loadingToastId, duration: note ? 8000 : undefined },
+            {
+              id: loadingToastId,
+              duration: pendingDroppedNote ? 8000 : undefined,
+            },
           );
-          setTimeout(() => window.location.reload(), 1500);
+          setTimeout(() => window.location.reload(), pendingDroppedNote ? 4500 : 1500);
         })
         .catch((error) => {
           toast.error(error || "Failed to save quotation", {
@@ -995,31 +1058,18 @@ const QuotationForm = () => {
     } else if (actionType === "submit") {
       dispatch(createResponse(data))
         .unwrap()
-        .then(async (result) => {
-          const quotationNo = result?.quotation_no || "";
-          let note = pendingDroppedNote;
-          if (directPdf && quotationNo) {
-            try {
-              toast.loading("Uploading PDF…", { id: loadingToastId });
-              await uploadPdfDirect(
-                directPdf.blob,
-                directPdf.filename,
-                quotationNo,
-                "response",
-              );
-            } catch (e) {
-              console.error("[PDF direct upload] failed:", e);
-              note += " — PDF upload failed; open the quotation to regenerate.";
-            }
-          }
+        .then((result) => {
           toast.success(
-            `Quotation response ${quotationNo} submitted successfully!${note}`.replace(
-              "  ",
+            `Quotation response ${result?.quotation_no || ""} submitted successfully!${pendingDroppedNote}`.replace(
+              /\s{2,}/g,
               " ",
             ),
-            { id: loadingToastId, duration: note ? 8000 : undefined },
+            {
+              id: loadingToastId,
+              duration: pendingDroppedNote ? 8000 : undefined,
+            },
           );
-          setTimeout(() => window.location.reload(), 1500);
+          setTimeout(() => window.location.reload(), pendingDroppedNote ? 4500 : 1500);
         })
         .catch((error) => {
           toast.error(error || "Failed to submit quotation response", {
@@ -1030,6 +1080,10 @@ const QuotationForm = () => {
           isSubmittingRef.current = false;
           setSubmittingAction(null);
         });
+    } else {
+      // Unknown actionType -> never leave the submit guard stuck.
+      isSubmittingRef.current = false;
+      setSubmittingAction(null);
     }
   };
 

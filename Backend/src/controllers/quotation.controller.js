@@ -1,7 +1,5 @@
-const db = require("../config/db.config");
 const {
   getNextSaveQuotationNumber,
-  invalidateSheetCache,
   lookupQuotation,
 } = require("../utils/quotationCache");
 const { checkHealth } = require("../utils/quotationSequence");
@@ -35,44 +33,42 @@ exports.getDbHealth = async (req, res) => {
   res.status(result.ok ? 200 : 503).json(result);
 };
 
-// Start a Drive resumable upload session; the browser PUTs the PDF straight to
-// the returned URL, bypassing Vercel's 4.5MB request-body cap.
-exports.createPdfSession = async (req, res) => {
+// Start a Drive resumable upload session for ANY file (PDF or image); the
+// browser PUTs the bytes straight to the returned URL, bypassing Vercel's
+// 4.5MB request-body cap.
+exports.createDriveSession = async (req, res) => {
   try {
-    const filename = (req.body?.filename || "quotation.pdf").toString();
-    const mimeType = (req.body?.mimeType || "application/pdf").toString();
+    const filename = (req.body?.filename || "quotation-file").toString();
+    const mimeType = (req.body?.mimeType || "application/octet-stream").toString();
     const uploadUrl = await createResumableUpload(filename, mimeType);
     res.json({ success: true, uploadUrl });
   } catch (error) {
-    console.error("[createPdfSession] Error:", error.message);
+    console.error("[createDriveSession] Error:", error.message);
     res
       .status(500)
-      .json({ success: false, message: "Could not start PDF upload" });
+      .json({ success: false, message: "Could not start upload" });
   }
 };
 
-// After the browser finishes the direct upload, make the file public and write
-// its link into the quotation's Generated_PDF column.
-exports.finalizePdf = async (req, res) => {
+// After the browser finishes a direct upload, make the file public and return
+// its shareable link. The link is then embedded in the (small) save request —
+// as Generated_PDF_URL for the PDF, or per-item image URLs — so no bytes ever
+// pass through the server.
+exports.finalizeDriveUpload = async (req, res) => {
   try {
-    const { fileId, quotationNo, source } = req.body || {};
-    if (!fileId || !quotationNo) {
+    const { fileId } = req.body || {};
+    if (!fileId) {
       return res
         .status(400)
-        .json({ success: false, message: "fileId and quotationNo are required" });
+        .json({ success: false, message: "fileId is required" });
     }
-    const sheetName = source === "response" ? "response" : "save";
     const url = await finalizeDriveFile(fileId);
-    await db.bulkUpdateByColumn(sheetName, "Quotation_No", [
-      { matchValue: quotationNo.toString().trim(), data: { Generated_PDF: url } },
-    ]);
-    invalidateSheetCache(sheetName);
     res.json({ success: true, url });
   } catch (error) {
-    console.error("[finalizePdf] Error:", error.message);
+    console.error("[finalizeDriveUpload] Error:", error.message);
     res
       .status(500)
-      .json({ success: false, message: "Could not finalize PDF" });
+      .json({ success: false, message: "Could not finalize upload" });
   }
 };
 
