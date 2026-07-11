@@ -786,6 +786,9 @@ const QuotationForm = () => {
 
     const loadingToastId = toast.loading("Processing quotation...");
     const data = new FormData();
+    // Set when the PDF/images are too big for Vercel's request-body cap and get
+    // dropped so the row data can still save; surfaced in the success toast.
+    let pendingDroppedNote = "";
 
     try {
       // 1. Compress all images first to reduce payload size
@@ -830,12 +833,7 @@ const QuotationForm = () => {
         (trimmedNo === "" || trimmedNo === autoNumberRef.current.trim());
       data.append("isNew", isNewQuotation ? "true" : "false");
 
-      // Append COMPRESSED images only for valid items
-      compressedImages.forEach((img) => {
-        if (img) {
-          data.append("Image_URL", img);
-        }
-      });
+      // Images + PDF are appended AFTER the size check below (see Generated_PDF).
 
       // Send the column visibility settings to the backend
       data.append("showFields", JSON.stringify(showFields));
@@ -865,8 +863,28 @@ const QuotationForm = () => {
         type: "application/pdf",
       });
 
-      // Append PDF File for the API to upload to Drive
-      data.append("Generated_PDF", pdfFile);
+      // Vercel caps the request body at ~4.5 MB. A large quotation's PDF (and
+      // images) can exceed that -> FUNCTION_PAYLOAD_TOO_LARGE, which fails the
+      // ENTIRE save and loses the user's data. So attach the PDF/images only if
+      // they fit, and ALWAYS let the (small) row data save. Report what dropped.
+      const PAYLOAD_LIMIT = 4 * 1024 * 1024; // safe margin under Vercel's 4.5MB
+      const imagesBytes = compressedImages.reduce(
+        (sum, img) => sum + (img?.size || 0),
+        0,
+      );
+      const pdfBytes = pdfBlob.size;
+
+      if (imagesBytes + pdfBytes <= PAYLOAD_LIMIT) {
+        compressedImages.forEach((img) => img && data.append("Image_URL", img));
+        data.append("Generated_PDF", pdfFile);
+      } else if (imagesBytes <= PAYLOAD_LIMIT) {
+        compressedImages.forEach((img) => img && data.append("Image_URL", img));
+        pendingDroppedNote =
+          " — PDF too large to attach, so it was skipped (data saved).";
+      } else {
+        pendingDroppedNote =
+          " — PDF and images too large to attach, so they were skipped (data saved).";
+      }
 
       // Automatically sync customer details to Customer Master
       if (values.Customer_Name) {
@@ -908,12 +926,13 @@ const QuotationForm = () => {
         .unwrap()
         .then((result) => {
           toast.success(
-            `Quotation ${result?.quotation_no || ""} saved successfully!`.replace(
+            `Quotation ${result?.quotation_no || ""} saved successfully!${pendingDroppedNote}`.replace(
               "  ",
               " ",
             ),
             {
               id: loadingToastId,
+              duration: pendingDroppedNote ? 8000 : undefined,
             },
           );
           setTimeout(() => window.location.reload(), 1500);
@@ -932,12 +951,13 @@ const QuotationForm = () => {
         .unwrap()
         .then((result) => {
           toast.success(
-            `Quotation response ${result?.quotation_no || ""} submitted successfully!`.replace(
+            `Quotation response ${result?.quotation_no || ""} submitted successfully!${pendingDroppedNote}`.replace(
               "  ",
               " ",
             ),
             {
               id: loadingToastId,
+              duration: pendingDroppedNote ? 8000 : undefined,
             },
           );
           setTimeout(() => window.location.reload(), 1500);
