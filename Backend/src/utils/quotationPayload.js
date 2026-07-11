@@ -62,8 +62,13 @@ const buildQuotationRows = ({
     const totalPrice = Number(item.total_price || taxablePrice + gstAmount);
     const isLastItem = index === items.length - 1;
 
+    // item.image is either a Drive URL (browser uploaded it directly for large
+    // quotations) or a truthy flag whose bytes were uploaded server-side into
+    // imageMap. A URL is used as-is; a flag pulls the next uploaded URL.
     let currentItemImage = "";
-    if (item.image) {
+    if (typeof item.image === "string" && /^https?:\/\//.test(item.image)) {
+      currentItemImage = item.image;
+    } else if (item.image) {
       currentItemImage = imageMap.get(imageCounter) || "";
       imageCounter += 1;
     }
