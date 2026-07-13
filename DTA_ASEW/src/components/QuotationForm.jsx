@@ -526,18 +526,26 @@ const QuotationForm = () => {
     updated[index][field] = value;
 
     if (field === "item_name") {
+      const prevName = (values.labEquipment[index].item_name || "").trim();
       const selectedItem = masterItems.find(
         (item) =>
           item.ITEM_CODE === value || item.ITEM_NAME?.trim() === value?.trim(),
       );
       if (selectedItem) {
-        updated[index].item_name = selectedItem.ITEM_NAME || value;
-        updated[index].specifications = selectedItem.SPECIFICATIONS || "";
-        const priceStr = selectedItem.UNIT_PRICE || "0";
-        updated[index].unit_price = parseFloat(priceStr.replace(/,/g, "")) || 0;
-        updated[index].hsn = selectedItem.HSN_CODE || "";
-        updated[index].make = selectedItem.MAKE || "";
-        updated[index].nabl = selectedItem.NABL ? "Yes" : "";
+        const newName = selectedItem.ITEM_NAME || value;
+        updated[index].item_name = newName;
+        // Pull catalog defaults ONLY when the item actually changes. Re-selecting
+        // the SAME item (e.g. while editing a saved quote) must not overwrite a
+        // custom price/spec with the catalog values.
+        if ((newName || "").trim() !== prevName) {
+          updated[index].specifications = selectedItem.SPECIFICATIONS || "";
+          const priceStr = String(selectedItem.UNIT_PRICE || "0");
+          updated[index].unit_price =
+            parseFloat(priceStr.replace(/,/g, "")) || 0;
+          updated[index].hsn = selectedItem.HSN_CODE || "";
+          updated[index].make = selectedItem.MAKE || "";
+          updated[index].nabl = selectedItem.NABL ? "Yes" : "";
+        }
       }
     }
 
