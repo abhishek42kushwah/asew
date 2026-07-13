@@ -534,10 +534,13 @@ const QuotationForm = () => {
       if (selectedItem) {
         const newName = selectedItem.ITEM_NAME || value;
         updated[index].item_name = newName;
-        // Pull catalog defaults ONLY when the item actually changes. Re-selecting
-        // the SAME item (e.g. while editing a saved quote) must not overwrite a
-        // custom price/spec with the catalog values.
-        if ((newName || "").trim() !== prevName) {
+        const sameItem =
+          (newName || "").trim().toLowerCase() === prevName.toLowerCase();
+        // Pull catalog price/spec ONLY for a genuine item change on a NEW
+        // quotation. Re-selecting the same item keeps custom values (new or
+        // saved quote), and while EDITING a saved quote selecting an item never
+        // pulls the catalog rate over the user's edited price/spec.
+        if (!sameItem && !isExistingQuotation) {
           updated[index].specifications = selectedItem.SPECIFICATIONS || "";
           const priceStr = String(selectedItem.UNIT_PRICE || "0");
           updated[index].unit_price =
