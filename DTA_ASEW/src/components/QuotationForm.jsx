@@ -524,6 +524,13 @@ const QuotationForm = () => {
   };
 
   const handleEquipmentChange = (index, field, value) => {
+    // Capture the previous item name BEFORE any mutation below. `updated[index]`
+    // is the same object reference as values.labEquipment[index] (shallow array
+    // copy), so `updated[index][field] = value` also mutates the original —
+    // reading prevName after that would return the NEW name and make every
+    // re-select look like "same item".
+    const prevName = (values.labEquipment[index]?.item_name || "").trim();
+
     const updated = [...values.labEquipment];
     updated[index][field] = value;
 
@@ -534,7 +541,6 @@ const QuotationForm = () => {
     }
 
     if (field === "item_name") {
-      const prevName = (values.labEquipment[index].item_name || "").trim();
       const selectedItem = masterItems.find(
         (item) =>
           item.ITEM_CODE === value || item.ITEM_NAME?.trim() === value?.trim(),
