@@ -128,6 +128,19 @@ exports.createResponse = async (req, res) => {
 
     const { resolvedQuotationNo, insertedCount } = outcome;
 
+    // A submitted quotation is finalized -> remove any lingering DRAFT of it from
+    // the save sheet, so reopening shows the submitted version (not a stale
+    // save draft). Done after the response write succeeds; a failure here is
+    // non-fatal (the response is already saved).
+    try {
+      await deleteQuotationRows("save", resolvedQuotationNo);
+    } catch (delErr) {
+      console.error(
+        "[createResponse] could not remove save draft:",
+        delErr.message,
+      );
+    }
+
     res.status(201).json({
       success: true,
       quotation_no: resolvedQuotationNo,

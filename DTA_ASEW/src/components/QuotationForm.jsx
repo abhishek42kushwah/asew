@@ -526,18 +526,29 @@ const QuotationForm = () => {
     updated[index][field] = value;
 
     if (field === "item_name") {
+      const prevName = (values.labEquipment[index].item_name || "").trim();
       const selectedItem = masterItems.find(
         (item) =>
           item.ITEM_CODE === value || item.ITEM_NAME?.trim() === value?.trim(),
       );
       if (selectedItem) {
-        updated[index].item_name = selectedItem.ITEM_NAME || value;
-        updated[index].specifications = selectedItem.SPECIFICATIONS || "";
-        const priceStr = selectedItem.UNIT_PRICE || "0";
-        updated[index].unit_price = parseFloat(priceStr.replace(/,/g, "")) || 0;
-        updated[index].hsn = selectedItem.HSN_CODE || "";
-        updated[index].make = selectedItem.MAKE || "";
-        updated[index].nabl = selectedItem.NABL ? "Yes" : "";
+        const newName = selectedItem.ITEM_NAME || value;
+        updated[index].item_name = newName;
+        const sameItem =
+          (newName || "").trim().toLowerCase() === prevName.toLowerCase();
+        // Pull catalog price/spec ONLY for a genuine item change on a NEW
+        // quotation. Re-selecting the same item keeps custom values (new or
+        // saved quote), and while EDITING a saved quote selecting an item never
+        // pulls the catalog rate over the user's edited price/spec.
+        if (!sameItem && !isExistingQuotation) {
+          updated[index].specifications = selectedItem.SPECIFICATIONS || "";
+          const priceStr = String(selectedItem.UNIT_PRICE || "0");
+          updated[index].unit_price =
+            parseFloat(priceStr.replace(/,/g, "")) || 0;
+          updated[index].hsn = selectedItem.HSN_CODE || "";
+          updated[index].make = selectedItem.MAKE || "";
+          updated[index].nabl = selectedItem.NABL ? "Yes" : "";
+        }
       }
     }
 
