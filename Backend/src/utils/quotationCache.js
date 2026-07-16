@@ -12,9 +12,19 @@ const {
 const { buildItemMasterMap } = require("./quotationPayload");
 const { allocateSequence, peekSequence } = require("./quotationSequence");
 
-// Bound the PG preview read so a cold/down DB never hangs the form's spinner;
-// on timeout we fall back to the (slower) sheet scan.
+// Bound the PG preview read so a cold/down DB never hangs the form's spinner.
 const PEEK_TIMEOUT_MS = 3000;
+// Bound the sheet-max scan used to catch the counter drifting behind the sheet.
+// If it doesn't finish in time we use the PG counter alone (fast); a real save
+// still self-corrects via its GREATEST floor.
+const SHEET_SCAN_TIMEOUT_MS = 3000;
+
+// Resolve a promise to null if it rejects or doesn't settle within ms.
+const settleOrNull = (promise, ms) =>
+  Promise.race([
+    Promise.resolve(promise).catch(() => null),
+    new Promise((resolve) => setTimeout(() => resolve(null), ms)),
+  ]);
 
 const ITEM_MASTER_TTL_MS = 5 * 60 * 1000;
 const SHEET_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -285,41 +295,26 @@ const getItemMasterMap = async () => {
   return itemMasterCache.map;
 };
 
-const getNextSaveQuotationNumber = async () => {
-  // Fast path: once seeded, the Postgres counter is the source of truth — a
-  // single indexed-row read instead of scanning ~30k sheet cells. This is what
-  // the form's "Quotation No" spinner waits on, so keep it cheap.
-  const pgLast = await peekSequence("save", { timeoutMs: PEEK_TIMEOUT_MS });
-  if (pgLast !== null) {
-    return formatQuotationNumber(SAVE_QUOTATION_PREFIX, pgLast + 1);
-  }
-
-  // Seed/fallback path (counter not yet initialized, or PG unavailable): scan
-  // the Quotation_No column of both sheets to find the max active sequence.
+// Scan the Quotation_No column of both sheets for the max active QT sequence
+// (ignoring out-of-band anomalies like year-like 2009/2010), or 0 if none.
+const computeSaveSheetMax = async () => {
   const [saveNos, responseNos] = await Promise.all([
     db.getColumnValues("save", "Quotation_No"),
     db.getColumnValues("response", "Quotation_No"),
   ]);
 
-  let maxSequence = SAVE_QUOTATION_MIN_SEQUENCE;
-
+  let maxSequence = 0;
   [saveNos, responseNos].forEach((quotationNos) => {
     quotationNos.forEach((quotationNo) => {
-      // Filter on the real prefix, not the zero-suffixed series prefix:
-      // formatQuotationNumber pads to 4 digits, so seq >= 1000 renders without
-      // a leading zero (".../1000") and would fail a "2026-27/QT/0" startsWith,
-      // silently dropping the highest numbers once the series crosses 999.
+      // Use the real prefix (not the zero-suffixed one) so seq >= 1000 isn't
+      // dropped once the series crosses 999.
       if (!quotationNo || !quotationNo.startsWith(SAVE_QUOTATION_PREFIX)) {
         return;
       }
-
       const sequence = parseQuotationSequence(
         quotationNo,
         SAVE_QUOTATION_PREFIX,
       );
-
-      // Ignore out-of-band anomalies (e.g. year-like 2009/2010) so numbering
-      // continues the dense active series.
       if (
         sequence !== null &&
         sequence > maxSequence &&
@@ -329,8 +324,26 @@ const getNextSaveQuotationNumber = async () => {
       }
     });
   });
+  return maxSequence;
+};
 
-  return formatQuotationNumber(SAVE_QUOTATION_PREFIX, maxSequence + 1);
+const getNextSaveQuotationNumber = async () => {
+  // The next number = GREATEST(Postgres counter, sheet max) + 1. The PG counter
+  // is authoritative and fast, but a save that ever fell back past it (brief PG
+  // outage) would advance the sheet only — so we also check the sheet so the
+  // preview never lags reality. Both run in parallel with timeouts: accurate in
+  // the normal case, and never hangs if either source is cold.
+  const [pgLast, sheetMax] = await Promise.all([
+    peekSequence("save", { timeoutMs: PEEK_TIMEOUT_MS }),
+    settleOrNull(computeSaveSheetMax(), SHEET_SCAN_TIMEOUT_MS),
+  ]);
+
+  const highest = Math.max(
+    SAVE_QUOTATION_MIN_SEQUENCE,
+    Number.isFinite(pgLast) ? pgLast : 0,
+    Number.isFinite(sheetMax) ? sheetMax : 0,
+  );
+  return formatQuotationNumber(SAVE_QUOTATION_PREFIX, highest + 1);
 };
 
 const getNextResponseQuotationNumber = async () => {
