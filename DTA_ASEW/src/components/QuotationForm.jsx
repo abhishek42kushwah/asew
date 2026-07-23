@@ -384,8 +384,6 @@ const QuotationForm = () => {
           // Keep the already-uploaded image link so re-saving an edit doesn't
           // wipe it; handleSubmit passes an http(s) string through as-is.
           image: item.Image_URL || null,
-          // Saved price is customized -> don't let an item re-select overwrite it.
-          priceEdited: true,
         };
       }),
     }));
@@ -534,12 +532,6 @@ const QuotationForm = () => {
     const updated = [...values.labEquipment];
     updated[index][field] = value;
 
-    // Remember when the user manually sets a price so a later item-select
-    // doesn't overwrite it with the catalog rate.
-    if (field === "unit_price") {
-      updated[index].priceEdited = true;
-    }
-
     if (field === "item_name") {
       const selectedItem = masterItems.find(
         (item) =>
@@ -550,12 +542,11 @@ const QuotationForm = () => {
         updated[index].item_name = newName;
         const sameItem =
           (newName || "").trim().toLowerCase() === prevName.toLowerCase();
-        // Pull catalog price/spec ONLY when the item genuinely changes AND the
-        // line's price hasn't been customized (a fresh line, or one still on
-        // catalog defaults). This fills a NEW line's price on select, lets you
-        // swap items on a not-yet-priced line, but NEVER overwrites a price the
-        // user typed or a saved quote's stored price (priceEdited=true).
-        if (!sameItem && !updated[index].priceEdited) {
+        // Load the catalog spec + price ONLY when the item genuinely CHANGES
+        // (a different product, or a fresh line). Re-selecting the SAME item
+        // keeps whatever's there, so it never wipes a custom price/spec the
+        // user edited on a saved quote.
+        if (!sameItem) {
           updated[index].specifications = selectedItem.SPECIFICATIONS || "";
           const priceStr = String(selectedItem.UNIT_PRICE || "0");
           updated[index].unit_price =
@@ -768,8 +759,6 @@ const QuotationForm = () => {
               gst_percent,
               gst_amount: calc_gst_amount,
               image: item.Image_URL || null,
-              // Copied price is customized -> item re-select must not overwrite.
-              priceEdited: true,
             };
           }),
         }));
