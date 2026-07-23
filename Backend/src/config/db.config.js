@@ -188,6 +188,42 @@ const getColumnValues = async (sheetName, columnName) => {
     .filter(Boolean);
 };
 
+// Read one column's non-empty values WITH their sheet row numbers. Used to
+// locate a single quotation's rows without loading the whole sheet.
+const getColumnEntries = async (sheetName, columnName) => {
+  const headers = await getHeaders(sheetName);
+  const idx = headers.indexOf(columnName);
+  if (idx === -1) return [];
+
+  const letter = columnNumberToLetter(idx);
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!${letter}2:${letter}`,
+  });
+
+  const entries = [];
+  (res.data.values || []).forEach((row, i) => {
+    const value = row[0] != null ? row[0].toString().trim() : "";
+    if (value) {
+      entries.push({ rowNumber: i + 2, value });
+    }
+  });
+  return entries;
+};
+
+// Read a contiguous row range as mapped objects (only the rows we need).
+const getRowRange = async (sheetName, startRow, endRow) => {
+  if (!startRow || !endRow || endRow < startRow) {
+    return [];
+  }
+  const headers = await getHeaders(sheetName);
+  const res = await sheets.spreadsheets.values.get({
+    spreadsheetId: SPREADSHEET_ID,
+    range: `${sheetName}!A${startRow}:ZZ${endRow}`,
+  });
+  return mapRows(headers, res.data.values || []);
+};
+
 const getAllWithRowNumbers = async (sheetName) => {
   const headers = await getHeaders(sheetName);
   const res = await sheets.spreadsheets.values.get({
@@ -379,6 +415,36 @@ const deleteRowRange = async (sheetName, startRow, endRow = startRow) => {
   return endRow - startRow + 1;
 };
 
+// Delete specific 1-based row numbers (bottom-up so earlier indices don't
+// shift). Used to remove one quotation's rows without scanning the whole sheet.
+const deleteRowNumbers = async (sheetName, rowNumbers = []) => {
+  const unique = [...new Set(rowNumbers.filter((n) => n > 0))].sort(
+    (a, b) => b - a,
+  );
+  if (!unique.length) {
+    return 0;
+  }
+
+  const metadata = await getSheetMetadata(sheetName);
+  const requests = unique.map((rn) => ({
+    deleteDimension: {
+      range: {
+        sheetId: metadata.sheetId,
+        dimension: "ROWS",
+        startIndex: rn - 1,
+        endIndex: rn,
+      },
+    },
+  }));
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: { requests },
+  });
+
+  return unique.length;
+};
+
 const deleteRowsByColumn = async (sheetName, columnName, value) => {
   const metadata = await getSheetMetadata(sheetName);
   const res = await sheets.spreadsheets.values.get({
@@ -448,12 +514,15 @@ module.exports = {
   bulkUpdateByColumn,
   clearSheet,
   deleteRowRange,
+  deleteRowNumbers,
   deleteRowsByColumn,
   find,
   findById,
   getAll,
   getAllWithRowNumbers,
   getColumnValues,
+  getColumnEntries,
+  getRowRange,
   getHeaders,
   getTail,
   insertByHeader,
