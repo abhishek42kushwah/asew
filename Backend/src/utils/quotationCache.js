@@ -194,50 +194,27 @@ const shiftEntriesAfterRow = (state, deletedEndRow, delta) => {
 };
 
 const deleteQuotationRows = async (sheetName, quotationNo) => {
-  const state = await ensureSheetLoaded(sheetName);
   const normalizedQuotationNo = quotationNo?.toString().trim();
-  const entry = state.byQuotationNo.get(normalizedQuotationNo);
-
-  if (!entry) {
-    // The in-memory cache has no record of this quotation, but rows may still
-    // exist in the sheet (cold/stale cache, multi-worker process, external
-    // edit, or a prior failed delete). Skipping deletion here causes the new
-    // rows to be appended after the surviving old rows -> item repetition.
-    // Fall back to an authoritative scan of the sheet so deletion is never
-    // silently skipped.
-    const deleted = await db.deleteRowsByColumn(
-      sheetName,
-      "Quotation_No",
-      normalizedQuotationNo,
-    );
-
-    if (deleted > 0) {
-      invalidateSheetCache(sheetName);
-    }
-
-    return { deleted, usedCache: false };
+  if (!normalizedQuotationNo) {
+    return { deleted: 0, usedCache: false };
   }
 
-  if (entry.spans.length !== 1) {
-    const deleted = await db.deleteRowsByColumn(
-      sheetName,
-      "Quotation_No",
-      normalizedQuotationNo,
-    );
+  // Targeted delete: locate the quotation's rows via the Quotation_No column
+  // (one column read) and delete exactly those, instead of loading + grouping
+  // the whole sheet. An authoritative read every time also means deletion is
+  // never silently skipped due to a stale cache.
+  const entries = await db.getColumnEntries(sheetName, "Quotation_No");
+  const rowNumbers = entries
+    .filter((e) => e.value === normalizedQuotationNo)
+    .map((e) => e.rowNumber);
 
-    invalidateSheetCache(sheetName);
-
-    return { deleted, usedCache: false };
+  if (!rowNumbers.length) {
+    return { deleted: 0, usedCache: false };
   }
 
-  const deleted = await db.deleteRowRange(sheetName, entry.startRow, entry.endRow);
-  state.byQuotationNo.delete(normalizedQuotationNo);
-  state.order = state.order.filter((value) => value !== normalizedQuotationNo);
-  shiftEntriesAfterRow(state, entry.endRow, -deleted);
-  sortSheetOrder(state);
-  state.loadedAt = Date.now();
-
-  return { deleted, usedCache: true };
+  const deleted = await db.deleteRowNumbers(sheetName, rowNumbers);
+  invalidateSheetCache(sheetName);
+  return { deleted, usedCache: false };
 };
 
 const upsertQuotationEntry = async (

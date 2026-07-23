@@ -415,6 +415,36 @@ const deleteRowRange = async (sheetName, startRow, endRow = startRow) => {
   return endRow - startRow + 1;
 };
 
+// Delete specific 1-based row numbers (bottom-up so earlier indices don't
+// shift). Used to remove one quotation's rows without scanning the whole sheet.
+const deleteRowNumbers = async (sheetName, rowNumbers = []) => {
+  const unique = [...new Set(rowNumbers.filter((n) => n > 0))].sort(
+    (a, b) => b - a,
+  );
+  if (!unique.length) {
+    return 0;
+  }
+
+  const metadata = await getSheetMetadata(sheetName);
+  const requests = unique.map((rn) => ({
+    deleteDimension: {
+      range: {
+        sheetId: metadata.sheetId,
+        dimension: "ROWS",
+        startIndex: rn - 1,
+        endIndex: rn,
+      },
+    },
+  }));
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: { requests },
+  });
+
+  return unique.length;
+};
+
 const deleteRowsByColumn = async (sheetName, columnName, value) => {
   const metadata = await getSheetMetadata(sheetName);
   const res = await sheets.spreadsheets.values.get({
@@ -484,6 +514,7 @@ module.exports = {
   bulkUpdateByColumn,
   clearSheet,
   deleteRowRange,
+  deleteRowNumbers,
   deleteRowsByColumn,
   find,
   findById,
