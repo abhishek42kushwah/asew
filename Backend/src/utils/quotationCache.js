@@ -14,17 +14,6 @@ const { allocateSequence, peekSequence } = require("./quotationSequence");
 
 // Bound the PG preview read so a cold/down DB never hangs the form's spinner.
 const PEEK_TIMEOUT_MS = 3000;
-// Bound the sheet-max scan used to catch the counter drifting behind the sheet.
-// If it doesn't finish in time we use the PG counter alone (fast); a real save
-// still self-corrects via its GREATEST floor.
-const SHEET_SCAN_TIMEOUT_MS = 3000;
-
-// Resolve a promise to null if it rejects or doesn't settle within ms.
-const settleOrNull = (promise, ms) =>
-  Promise.race([
-    Promise.resolve(promise).catch(() => null),
-    new Promise((resolve) => setTimeout(() => resolve(null), ms)),
-  ]);
 
 const ITEM_MASTER_TTL_MS = 5 * 60 * 1000;
 const SHEET_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -141,23 +130,43 @@ const getQuotationEntry = async (sheetName, quotationNo) => {
   return state.byQuotationNo.get(quotationNo?.toString().trim()) || null;
 };
 
+// Find ONE quotation without loading/grouping the whole sheet: locate its rows
+// via the Quotation_No column, then read just that row range.
+const findGroupedQuotation = async (sheetName, quotationNo) => {
+  const entries = await db.getColumnEntries(sheetName, "Quotation_No");
+  const matches = entries.filter((e) => e.value === quotationNo);
+  if (!matches.length) {
+    return null;
+  }
+  const startRow = matches[0].rowNumber;
+  const endRow = matches[matches.length - 1].rowNumber;
+  const rows = await db.getRowRange(sheetName, startRow, endRow);
+  const own = rows.filter(
+    (r) => (r.Quotation_No || "").toString().trim() === quotationNo,
+  );
+  return buildGroupedQuotation(own);
+};
+
 const lookupQuotation = async (quotationNo) => {
   const normalizedQuotationNo = quotationNo?.toString().trim();
   if (!normalizedQuotationNo) return null;
 
-  const saveEntry = await getQuotationEntry("save", normalizedQuotationNo);
-  if (saveEntry) {
+  const saveData = await findGroupedQuotation("save", normalizedQuotationNo);
+  if (saveData) {
     return {
       source: "save",
-      data: saveEntry.data,
+      data: saveData,
     };
   }
 
-  const responseEntry = await getQuotationEntry("response", normalizedQuotationNo);
-  if (responseEntry) {
+  const responseData = await findGroupedQuotation(
+    "response",
+    normalizedQuotationNo,
+  );
+  if (responseData) {
     return {
       source: "response",
-      data: responseEntry.data,
+      data: responseData,
     };
   }
 
@@ -328,21 +337,17 @@ const computeSaveSheetMax = async () => {
 };
 
 const getNextSaveQuotationNumber = async () => {
-  // The next number = GREATEST(Postgres counter, sheet max) + 1. The PG counter
-  // is authoritative and fast, but a save that ever fell back past it (brief PG
-  // outage) would advance the sheet only — so we also check the sheet so the
-  // preview never lags reality. Both run in parallel with timeouts: accurate in
-  // the normal case, and never hangs if either source is cold.
-  const [pgLast, sheetMax] = await Promise.all([
-    peekSequence("save", { timeoutMs: PEEK_TIMEOUT_MS }),
-    settleOrNull(computeSaveSheetMax(), SHEET_SCAN_TIMEOUT_MS),
-  ]);
+  // Fast path: the Postgres counter is authoritative — a single indexed-row
+  // read (~ms). Keep it cheap; the counter is kept in sync by every save's
+  // GREATEST floor, and reconciled if it ever drifts. Only scan the sheet when
+  // PG is genuinely unavailable (the seed/fallback case).
+  const pgLast = await peekSequence("save", { timeoutMs: PEEK_TIMEOUT_MS });
+  if (pgLast !== null) {
+    return formatQuotationNumber(SAVE_QUOTATION_PREFIX, pgLast + 1);
+  }
 
-  const highest = Math.max(
-    SAVE_QUOTATION_MIN_SEQUENCE,
-    Number.isFinite(pgLast) ? pgLast : 0,
-    Number.isFinite(sheetMax) ? sheetMax : 0,
-  );
+  const sheetMax = await computeSaveSheetMax();
+  const highest = Math.max(SAVE_QUOTATION_MIN_SEQUENCE, sheetMax);
   return formatQuotationNumber(SAVE_QUOTATION_PREFIX, highest + 1);
 };
 
