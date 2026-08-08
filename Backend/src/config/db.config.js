@@ -138,7 +138,12 @@ const insertByHeader = async (sheetName, dataObject) => {
 
   const response = await sheets.spreadsheets.values.append({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A:ZZ`,
+    // Range MUST be a single column ("A:A"), not a wide range ("A:ZZ"). With a
+    // wide range, Sheets "table detection" can latch onto a stray data block in
+    // far-right columns and append THERE, shifting the whole row (verified: a
+    // trailing block at AH-BW made A:ZZ append at AH, A:A appended at A). A:A
+    // confines detection to column A, forcing correct column-A alignment.
+    range: `${sheetName}!A:A`,
     valueInputOption: "USER_ENTERED",
     insertDataOption: "INSERT_ROWS",
     requestBody: { values: [row] },
@@ -166,7 +171,8 @@ const insertMultipleByHeader = async (sheetName, dataObjects) => {
 
   const response = await sheets.spreadsheets.values.append({
     spreadsheetId: SPREADSHEET_ID,
-    range: `${sheetName}!A:ZZ`,
+    // Single-column range ("A:A") forces column-A alignment — see insertByHeader.
+    range: `${sheetName}!A:A`,
     valueInputOption: "USER_ENTERED",
     insertDataOption: "INSERT_ROWS",
     requestBody: { values: rows },
