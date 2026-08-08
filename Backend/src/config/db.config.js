@@ -57,6 +57,16 @@ const getHeaders = async (sheetName, { forceRefresh = false } = {}) => {
     header.toString().trim(),
   );
 
+  // Never cache an empty header. A throttled/degraded Sheets read can return no
+  // values WITHOUT erroring; caching [] would poison this (serverless) instance
+  // and make every subsequent header-mapped write land in the wrong columns or
+  // as a blank row. Throw so the caller fails loudly instead of corrupting data.
+  if (headers.length === 0) {
+    throw new Error(
+      `getHeaders("${sheetName}") returned an empty header row — refusing to cache (Sheets API may be degraded).`,
+    );
+  }
+
   headerCache.set(sheetName, headers);
   return headers;
 };
@@ -107,9 +117,24 @@ const resolveHeadersFor = async (sheetName, dataObjects) => {
   return headers;
 };
 
+// Guard against writing a misaligned/blank row when the header couldn't be
+// resolved sanely (e.g. Sheets was degraded and returned a short/garbage header,
+// or the payload keys don't match the live columns). Refuse rather than corrupt.
+const assertRowMapsToHeader = (sheetName, dataObject, headers, row) => {
+  const payloadKeys = Object.keys(dataObject);
+  const matched = payloadKeys.filter((key) => headers.includes(key)).length;
+  if (matched === 0 || row.every((v) => v === "")) {
+    throw new Error(
+      `Refusing to append to "${sheetName}": payload keys did not map to any header ` +
+        `(${matched}/${payloadKeys.length} matched). Header may be corrupt/degraded.`,
+    );
+  }
+};
+
 const insertByHeader = async (sheetName, dataObject) => {
   const rawHeaders = await resolveHeadersFor(sheetName, [dataObject]);
   const row = rawHeaders.map((header) => dataObject[header] ?? "");
+  assertRowMapsToHeader(sheetName, dataObject, rawHeaders, row);
 
   const response = await sheets.spreadsheets.values.append({
     spreadsheetId: SPREADSHEET_ID,
@@ -133,9 +158,11 @@ const insertMultipleByHeader = async (sheetName, dataObjects) => {
   }
 
   const rawHeaders = await resolveHeadersFor(sheetName, dataObjects);
-  const rows = dataObjects.map((dataObject) =>
-    rawHeaders.map((header) => dataObject[header] ?? ""),
-  );
+  const rows = dataObjects.map((dataObject) => {
+    const row = rawHeaders.map((header) => dataObject[header] ?? "");
+    assertRowMapsToHeader(sheetName, dataObject, rawHeaders, row);
+    return row;
+  });
 
   const response = await sheets.spreadsheets.values.append({
     spreadsheetId: SPREADSHEET_ID,
